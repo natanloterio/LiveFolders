@@ -15,7 +15,7 @@ cat /tools/github/search_repos
 ### 1. Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/natanloterio/livefolders/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/natanloterio/LiveFolders/master/install.sh | bash
 ```
 
 Detects your OS and architecture, downloads the right binary, and installs it to `/usr/local/bin`. Warns if FUSE is missing.
@@ -29,13 +29,13 @@ Detects your OS and architecture, downloads the right binary, and installs it to
 
 ```bash
 # Linux x86_64
-curl -L https://github.com/natanloterio/livefolders/releases/latest/download/livefolders-linux-x86_64 -o livefolders
+curl -L https://github.com/natanloterio/LiveFolders/releases/latest/download/livefolders-linux-x86_64 -o livefolders
 # Linux ARM64
-curl -L https://github.com/natanloterio/livefolders/releases/latest/download/livefolders-linux-aarch64 -o livefolders
+curl -L https://github.com/natanloterio/LiveFolders/releases/latest/download/livefolders-linux-aarch64 -o livefolders
 # macOS Apple Silicon
-curl -L https://github.com/natanloterio/livefolders/releases/latest/download/livefolders-macos-aarch64 -o livefolders
+curl -L https://github.com/natanloterio/LiveFolders/releases/latest/download/livefolders-macos-aarch64 -o livefolders
 # macOS Intel
-curl -L https://github.com/natanloterio/livefolders/releases/latest/download/livefolders-macos-x86_64 -o livefolders
+curl -L https://github.com/natanloterio/LiveFolders/releases/latest/download/livefolders-macos-x86_64 -o livefolders
 
 chmod +x livefolders && sudo mv livefolders /usr/local/bin/
 ```
@@ -44,7 +44,7 @@ chmod +x livefolders && sudo mv livefolders /usr/local/bin/
 
 ```bash
 sudo apt-get install libfuse3-dev pkg-config  # Linux only
-cargo install --git https://github.com/natanloterio/livefolders
+cargo install --git https://github.com/natanloterio/LiveFolders
 ```
 
 ### 2. Init
