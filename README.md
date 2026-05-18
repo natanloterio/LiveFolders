@@ -59,11 +59,12 @@ cargo install --git https://github.com/natanloterio/modixfs
 # 1. Create a tools.yaml in your project
 modixfs init
 
-# 2. Edit tools.yaml to enable the tools you want
-# 3. Set any required tokens
-export GITHUB_TOKEN=your_token
+# 2. Edit tools.yaml to enable the tools you want and set tools_dir
 
-# 4. Mount
+# 3. Install a tool (prompts for secrets, stores them automatically)
+modixfs install github.com/someone/their-modixfs-tool
+
+# 4. Mount — secrets are loaded from ~/.config/modixfs/secrets.env automatically
 modixfs mount
 ```
 
@@ -82,6 +83,16 @@ The installer will:
 4. Copy the tool into your `tools_dir`
 
 `modixfs mount` loads secrets automatically at startup — no manual `export` needed.
+
+Secrets are stored in `~/.config/modixfs/secrets.env` (created with `chmod 600`). You can also edit it directly:
+
+```
+# ~/.config/modixfs/secrets.env
+MYTOOL_API_KEY=sk-...
+GITHUB_TOKEN=ghp_...
+```
+
+Shell environment always wins — existing env vars are never overwritten by the file.
 
 For tools in a subdirectory of a repo:
 
@@ -181,11 +192,15 @@ Scripts receive:
 - `MODIXFS_ENDPOINT` — endpoint name
 - All env vars set when `modixfs` was launched
 
+### Hot-reload
+
+ModixFS watches `tools_dir` with inotify/kqueue. Adding or removing a tool directory takes effect immediately — no restart required.
+
 ### Enable in tools.yaml
 
 ```yaml
 tools_dir: ~/.config/modixfs/tools
-timeout: 30
+timeout: 30   # seconds before an endpoint invocation is killed
 ```
 
 ### The LLM can create tools too
