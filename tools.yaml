@@ -1,9 +1,9 @@
-# ModixFS configuration
-# Run: modixfs [mountpoint] [--config path]
-# Mountpoint defaults to /tmp/modixfs if not set here or via CLI.
+# LiveFolders configuration
+# Run: livefolders [mountpoint] [--config path]
+# Mountpoint defaults to /tmp/livefolders if not set here or via CLI.
 
-mount: /tmp/modixfs
-tools_dir: ~/.config/modixfs/tools
+mount: /tmp/livefolders
+tools_dir: ~/.config/livefolders/tools
 timeout: 30
 
 tools:

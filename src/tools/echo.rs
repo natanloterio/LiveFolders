@@ -12,7 +12,7 @@ impl Tool for EchoTool {
     }
 
     fn description(&self) -> &str {
-        "Echoes input back. Useful for testing ModixFS is working."
+        "Echoes input back. Useful for testing LiveFolders is working."
     }
 
     fn how_to(&self) -> &str {
@@ -23,9 +23,9 @@ Write anything to `send` and read it back.
 ## Example
 
 ```bash
-echo "hello modixfs" > /tools/echo/send
+echo "hello livefolders" > /tools/echo/send
 cat /tools/echo/send
-# → hello modixfs
+# → hello livefolders
 ```
 "#
     }

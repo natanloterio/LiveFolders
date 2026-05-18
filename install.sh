@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="natanloterio/modixfs"
-BIN="modixfs"
+REPO="natanloterio/livefolders"
+BIN="livefolders"
 INSTALL_DIR="/usr/local/bin"
 
 # ── colours ──────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ download() {
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────
-printf "\n  ${BOLD}ModixFS installer${RESET}\n\n"
+printf "\n  ${BOLD}LiveFolders installer${RESET}\n\n"
 
 info "Detecting platform: ${OS}/${ARCH}"
 check_fuse
@@ -97,4 +97,4 @@ else
 fi
 
 ok "Installed: $(command -v ${BIN})"
-printf "\n  ${GREEN}${BOLD}Done.${RESET} Run ${BOLD}modixfs init${RESET} to get started.\n\n"
+printf "\n  ${GREEN}${BOLD}Done.${RESET} Run ${BOLD}livefolders init${RESET} to get started.\n\n"

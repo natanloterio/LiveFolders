@@ -18,19 +18,19 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-            binary: modixfs
-            asset: modixfs-linux-x86_64
+            binary: livefolders
+            asset: livefolders-linux-x86_64
 
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
-            binary: modixfs
-            asset: modixfs-linux-aarch64
+            binary: livefolders
+            asset: livefolders-linux-aarch64
             cross: true
 
           - target: aarch64-apple-darwin
             os: macos-14
-            binary: modixfs
-            asset: modixfs-macos-aarch64
+            binary: livefolders
+            asset: livefolders-macos-aarch64
 
     steps:
       - uses: actions/checkout@v4
@@ -94,9 +94,9 @@ jobs:
 
             ### Linux (x86_64)
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/modixfs-linux-x86_64 -o modixfs
-            chmod +x modixfs
-            sudo mv modixfs /usr/local/bin/
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/livefolders-linux-x86_64 -o livefolders
+            chmod +x livefolders
+            sudo mv livefolders /usr/local/bin/
 
             # Requires fuse3
             sudo apt-get install fuse3
@@ -104,9 +104,9 @@ jobs:
 
             ### Linux (ARM64)
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/modixfs-linux-aarch64 -o modixfs
-            chmod +x modixfs
-            sudo mv modixfs /usr/local/bin/
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/livefolders-linux-aarch64 -o livefolders
+            chmod +x livefolders
+            sudo mv livefolders /usr/local/bin/
             ```
 
             ### macOS
@@ -114,17 +114,17 @@ jobs:
             # Install macFUSE first: https://osxfuse.github.io
 
             # Intel
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/modixfs-macos-x86_64 -o modixfs
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/livefolders-macos-x86_64 -o livefolders
 
             # Apple Silicon
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/modixfs-macos-aarch64 -o modixfs
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/livefolders-macos-aarch64 -o livefolders
 
-            chmod +x modixfs
-            sudo mv modixfs /usr/local/bin/
+            chmod +x livefolders
+            sudo mv livefolders /usr/local/bin/
             ```
 
             ## Quick start
             ```bash
-            modixfs init       # creates tools.yaml in current directory
-            modixfs mount      # mounts at path defined in tools.yaml
+            livefolders init       # creates tools.yaml in current directory
+            livefolders mount      # mounts at path defined in tools.yaml
             ```

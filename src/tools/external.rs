@@ -75,8 +75,8 @@ impl Tool for ExternalTool {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .current_dir(&self.dir)
-            .env("MODIXFS_TOOL", &self.name)
-            .env("MODIXFS_ENDPOINT", endpoint)
+            .env("LIVEFOLDERS_TOOL", &self.name)
+            .env("LIVEFOLDERS_ENDPOINT", endpoint)
             .spawn()
         {
             Ok(c) => c,

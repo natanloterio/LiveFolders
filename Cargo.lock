@@ -639,6 +639,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
+name = "livefolders"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "flate2",
+ "fuser",
+ "libc",
+ "notify",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -705,27 +726,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "modixfs"
-version = "0.3.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "flate2",
- "fuser",
- "libc",
- "notify",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "tar",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

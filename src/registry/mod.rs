@@ -37,7 +37,7 @@ impl ToolRegistry {
     }
 
     pub fn root_index(&self) -> String {
-        let mut lines = vec!["# ModixFS Tools\n".to_string()];
+        let mut lines = vec!["# LiveFolders Tools\n".to_string()];
         for name in self.list() {
             if let Some(tool) = self.get(name) {
                 lines.push(format!("- **{}** — {}", name, tool.description()));

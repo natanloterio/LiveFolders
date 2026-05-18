@@ -32,7 +32,7 @@ type InodeTable = Arc<Mutex<HashMap<u64, PathBuf>>>;
 /// Disk path → inode mapping for external tool files.
 type PathTable = Arc<Mutex<HashMap<PathBuf, u64>>>;
 
-pub struct ModixFS {
+pub struct LiveFolders {
     registry: Arc<RwLock<ToolRegistry>>,
     tools_dir: Option<PathBuf>,
     session: Session,
@@ -44,7 +44,7 @@ pub struct ModixFS {
     next_ino: Arc<Mutex<u64>>,
 }
 
-impl ModixFS {
+impl LiveFolders {
     pub fn new(
         registry: Arc<RwLock<ToolRegistry>>,
         tools_dir: Option<PathBuf>,
@@ -282,7 +282,7 @@ impl ModixFS {
     }
 }
 
-impl Filesystem for ModixFS {
+impl Filesystem for LiveFolders {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         debug!("lookup parent={} name={:?}", parent, name);
         let attr = match parent {
