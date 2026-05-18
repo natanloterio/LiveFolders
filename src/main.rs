@@ -2,6 +2,7 @@ mod config;
 mod fs;
 mod registry;
 mod tools;
+mod watcher;
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -124,6 +125,15 @@ fn cmd_mount(args: &[String]) -> Result<()> {
     println!("Mounted at {}  (Ctrl-C or unmount to stop)", mountpoint.display());
 
     let tools_dir = cfg.resolved_tools_dir().unwrap_or(None);
+
+    if let Some(ref td) = tools_dir {
+        if td.exists() {
+            let _guard = rt.enter();
+            watcher::spawn_watcher(td.clone(), Arc::clone(&registry), cfg.timeout_secs);
+            info!("hot-reload watcher started");
+        }
+    }
+
     let fs = ModixFS::new(registry, tools_dir, session, handle);
     fuser::mount2(fs, &mountpoint, &options)?;
 
