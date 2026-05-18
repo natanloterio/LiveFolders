@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="natanloterio/livefolders"
+REPO="natanloterio/LiveFolders"
 BIN="livefolders"
 INSTALL_DIR="/usr/local/bin"
 

@@ -3,7 +3,7 @@ name = "livefolders"
 version = "0.3.1"
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/natanloterio/livefolders"
+repository = "https://github.com/natanloterio/LiveFolders"
 
 [[bin]]
 name = "livefolders"
