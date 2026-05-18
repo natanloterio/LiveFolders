@@ -178,12 +178,18 @@ impl ModixFS {
                 if let Some(disk_path) = self.path_for_ino(ino) {
                     if let Ok(meta) = std::fs::metadata(&disk_path) {
                         use std::os::unix::fs::PermissionsExt;
-                        let perm = (meta.permissions().mode() as u16) & 0o777;
+                        let mode = meta.permissions().mode();
+                        let perm = (mode as u16) & 0o777;
                         if meta.is_dir() {
                             return Some(Self::dir_attr(ino));
-                        } else {
-                            return Some(Self::file_attr(ino, meta.len(), perm));
                         }
+                        let is_exec = mode & 0o111 != 0;
+                        let size = if is_exec {
+                            self.result_buf.lock().unwrap().get(&ino).map(|r| r.len()).unwrap_or(0) as u64
+                        } else {
+                            meta.len()
+                        };
+                        return Some(Self::file_attr(ino, size, perm));
                     }
                 }
                 // tool dir?
@@ -238,7 +244,12 @@ impl ModixFS {
         let tool = registry.get(tool_name)?;
 
         if s == "how_to.md" {
-            let size = tool.how_to().len() as u64;
+            let how_to = tool.how_to();
+            if how_to.is_empty() {
+                // External tool: how_to.md lives on disk — fall through to lookup_external_file
+                return None;
+            }
+            let size = how_to.len() as u64;
             return Some(Self::file_attr(how_to_ino(idx), size, 0o444));
         }
 
@@ -369,7 +380,7 @@ impl Filesystem for ModixFS {
         _lock: Option<u64>,
         reply: ReplyData,
     ) {
-        // Passthrough: external file on disk (non-executable = data file, not endpoint)
+        // External file on disk: passthrough read (non-exec) or return invoke result (exec).
         if let Some(disk_path) = self.path_for_ino(ino) {
             use std::os::unix::fs::PermissionsExt;
             let is_exec = std::fs::metadata(&disk_path)
@@ -388,8 +399,19 @@ impl Filesystem for ModixFS {
                     }
                     Err(e) => reply.error(e.raw_os_error().unwrap_or(libc::EIO)),
                 }
-                return;
+            } else {
+                // Executable external file: return the last invocation result.
+                let result = self.result_buf.lock().unwrap().remove(&ino);
+                let bytes = result.unwrap_or_default();
+                let start = offset as usize;
+                if start >= bytes.len() {
+                    reply.data(&[]);
+                } else {
+                    let end = (start + size as usize).min(bytes.len());
+                    reply.data(&bytes[start..end]);
+                }
             }
+            return;
         }
 
         let data: Option<Vec<u8>> = match ino {
@@ -464,7 +486,7 @@ impl Filesystem for ModixFS {
         _flush: bool,
         reply: fuser::ReplyEmpty,
     ) {
-        // Passthrough: flush write_buf to disk for external non-executable files
+        // External file on disk: flush to disk (non-exec) or invoke subprocess (exec).
         if let Some(disk_path) = self.path_for_ino(ino) {
             use std::os::unix::fs::PermissionsExt;
             let is_exec = std::fs::metadata(&disk_path)
@@ -477,6 +499,36 @@ impl Filesystem for ModixFS {
                 reply.ok();
                 return;
             }
+            // Executable external file: derive tool/endpoint from path and invoke subprocess.
+            let input = self.write_buf.lock().unwrap().remove(&ino).unwrap_or_default();
+            if !input.is_empty() {
+                if let Some(tools_dir) = self.tools_dir.clone() {
+                    if let Ok(rel) = disk_path.strip_prefix(&tools_dir) {
+                        let parts: Vec<_> = rel.components().collect();
+                        if parts.len() >= 2 {
+                            use std::ffi::OsStr;
+                            let tool_name = parts[0].as_os_str().to_string_lossy().to_string();
+                            let ep_name = parts[1].as_os_str().to_string_lossy().to_string();
+                            let tool = self.registry.read().unwrap().get(&tool_name);
+                            if let Some(tool) = tool {
+                                let session = self.session.clone();
+                                let result_buf = self.result_buf.clone();
+                                self.rt.spawn(async move {
+                                    let result = tool.invoke(&ep_name, &input, &session).await;
+                                    let output = if result.is_error() {
+                                        format!("ERROR: {}\n", result.error.unwrap()).into_bytes()
+                                    } else {
+                                        result.output
+                                    };
+                                    result_buf.lock().unwrap().insert(ino, output);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            reply.ok();
+            return;
         }
 
         let input = match self.write_buf.lock().unwrap().remove(&ino) {
