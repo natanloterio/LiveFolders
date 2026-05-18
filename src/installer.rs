@@ -8,6 +8,7 @@ pub struct GithubUrl {
 }
 
 pub fn parse_github_url(url: &str) -> Result<GithubUrl> {
+    let url = url.trim_end_matches('/');
     let url = url
         .trim_start_matches("https://")
         .trim_start_matches("http://");
@@ -83,6 +84,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let gz = flate2::read::GzDecoder::new(bytes.as_ref());
     let mut archive = tar::Archive::new(gz);
+    // tar 0.4.26+ validates entries against path traversal during unpack.
     archive.unpack(tmp.path())?;
 
     // GitHub tarballs contain one top-level directory (owner-repo-SHA/).
@@ -134,6 +136,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
         let value = value.trim().to_string();
         if !value.is_empty() {
             crate::secrets::append_secret(&decl.name, &value)?;
+            // SAFETY: install() is called from synchronous main() before any Tokio runtime is created.
             unsafe { std::env::set_var(&decl.name, &value); }
         }
     }
@@ -207,5 +210,12 @@ mod tests {
     fn parse_invalid_url_errors() {
         assert!(parse_github_url("notgithub.com/x").is_err());
         assert!(parse_github_url("github.com/onlyone").is_err());
+    }
+
+    #[test]
+    fn parse_trailing_slash() {
+        let u = parse_github_url("github.com/alice/mytool/").unwrap();
+        assert_eq!(u.owner, "alice");
+        assert_eq!(u.repo, "mytool");
     }
 }
