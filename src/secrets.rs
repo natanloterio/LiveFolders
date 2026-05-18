@@ -4,7 +4,7 @@ use anyhow::Result;
 
 fn secrets_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join(".config/modixfs/secrets.env")
+    PathBuf::from(home).join(".config/livefolders/secrets.env")
 }
 
 fn parse_env_file(content: &str) -> Vec<(String, String)> {
@@ -90,11 +90,11 @@ mod tests {
     #[test]
     fn has_secret_finds_env_var() {
         unsafe {
-            std::env::set_var("_TEST_MODIX_PRESENT", "yes");
+            std::env::set_var("_TEST_LF_PRESENT", "yes");
         }
-        assert!(std::env::var("_TEST_MODIX_PRESENT").is_ok());
+        assert!(std::env::var("_TEST_LF_PRESENT").is_ok());
         unsafe {
-            std::env::remove_var("_TEST_MODIX_PRESENT");
+            std::env::remove_var("_TEST_LF_PRESENT");
         }
     }
 }

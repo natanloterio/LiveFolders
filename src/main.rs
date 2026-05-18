@@ -16,12 +16,12 @@ use tokio::runtime::Runtime;
 use tracing::{info, warn};
 
 use config::Config;
-use fs::ModixFS;
+use fs::LiveFolders;
 use registry::{Session, ToolRegistry};
 use tools::{EchoTool, ExternalTool, GitHubTool};
 
 const USAGE: &str = "\
-Usage: modixfs <command> [options]
+Usage: livefolders <command> [options]
 
 Commands:
   init                   Create a starter tools.yaml in the current directory
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("modixfs=info".parse()?),
+                .add_directive("livefolders=info".parse()?),
         )
         .init();
 
@@ -56,8 +56,8 @@ fn main() -> Result<()> {
         "install" => {
             let url = args.get(2).map(|s| s.as_str()).unwrap_or("");
             if url.is_empty() {
-                eprintln!("Usage: modixfs install <github-url>");
-                eprintln!("Example: modixfs install github.com/owner/repo");
+                eprintln!("Usage: livefolders install <github-url>");
+                eprintln!("Example: livefolders install github.com/owner/repo");
                 std::process::exit(1);
             }
             let cfg = load_config_for_install(&args);
@@ -83,10 +83,10 @@ fn cmd_init() -> Result<()> {
     }
     std::fs::write(
         &path,
-        r#"# ModixFS configuration
-# Run `modixfs mount` to start the filesystem.
+        r#"# LiveFolders configuration
+# Run `livefolders mount` to start the filesystem.
 
-mount: /tmp/modixfs
+mount: /tmp/livefolders
 
 tools:
   - name: echo
@@ -97,7 +97,7 @@ tools:
 "#,
     )?;
     println!("Created tools.yaml");
-    println!("Edit it to configure your tools, then run: modixfs mount");
+    println!("Edit it to configure your tools, then run: livefolders mount");
     Ok(())
 }
 
@@ -133,7 +133,7 @@ fn cmd_mount(args: &[String]) -> Result<()> {
 
     let mountpoint = cli_mount
         .or_else(|| cfg.mount.clone())
-        .unwrap_or_else(|| PathBuf::from("/tmp/modixfs"));
+        .unwrap_or_else(|| PathBuf::from("/tmp/livefolders"));
 
     std::fs::create_dir_all(&mountpoint)
         .with_context(|| format!("creating mountpoint {}", mountpoint.display()))?;
@@ -148,12 +148,12 @@ fn cmd_mount(args: &[String]) -> Result<()> {
 
     let options = vec![
         MountOption::RW,
-        MountOption::FSName("modixfs".to_string()),
+        MountOption::FSName("livefolders".to_string()),
         MountOption::AutoUnmount,
         MountOption::AllowOther,
     ];
 
-    info!("mounting modixfs at {}", mountpoint.display());
+    info!("mounting livefolders at {}", mountpoint.display());
     println!("Mounted at {}  (Ctrl-C or unmount to stop)", mountpoint.display());
 
     let tools_dir = cfg.resolved_tools_dir().unwrap_or(None);
@@ -169,7 +169,7 @@ fn cmd_mount(args: &[String]) -> Result<()> {
         }
     }
 
-    let fs = ModixFS::new(registry, tools_dir, session, handle);
+    let fs = LiveFolders::new(registry, tools_dir, session, handle);
     fuser::mount2(fs, &mountpoint, &options)?;
 
     Ok(())

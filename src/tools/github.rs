@@ -103,7 +103,7 @@ async fn search_repos(client: &reqwest::Client, token: &str, query: &str) -> Too
     let resp = client
         .get("https://api.github.com/search/repositories")
         .header("Authorization", format!("Bearer {}", token))
-        .header("User-Agent", "modixfs/0.1")
+        .header("User-Agent", "livefolders/0.1")
         .header("Accept", "application/vnd.github+json")
         .query(&[("q", query), ("per_page", "10")])
         .send()
@@ -139,7 +139,7 @@ async fn search_code(client: &reqwest::Client, token: &str, query: &str) -> Tool
     let resp = client
         .get("https://api.github.com/search/code")
         .header("Authorization", format!("Bearer {}", token))
-        .header("User-Agent", "modixfs/0.1")
+        .header("User-Agent", "livefolders/0.1")
         .header("Accept", "application/vnd.github+json")
         .query(&[("q", query), ("per_page", "10")])
         .send()

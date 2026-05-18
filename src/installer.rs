@@ -43,7 +43,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
 
     let tools_dir = cfg.resolved_tools_dir()?.ok_or_else(|| {
         anyhow::anyhow!(
-            "tools_dir is not configured in tools.yaml. Add:\n  tools_dir: ~/.config/modixfs/tools"
+            "tools_dir is not configured in tools.yaml. Add:\n  tools_dir: ~/.config/livefolders/tools"
         )
     })?;
 
@@ -57,7 +57,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
     );
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("modixfs")
+        .user_agent("livefolders")
         .redirect(reqwest::redirect::Policy::limited(10))
         .build()?;
 
@@ -113,7 +113,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
             m
         }
         None => {
-            tracing::warn!("no modix.yaml found — installing without manifest");
+            tracing::warn!("no livefolders.yaml found — installing without manifest");
             crate::manifest::Manifest::default()
         }
     };
@@ -159,7 +159,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
     copy_dir_all(&tool_src, &dest)?;
 
     println!("Installed {} → {}", tool_name, dest.display());
-    println!("Run `modixfs mount` to start using it (or it will appear automatically if already mounted).");
+    println!("Run `livefolders mount` to start using it (or it will appear automatically if already mounted).");
 
     Ok(())
 }

@@ -1,5 +1,5 @@
 pub const ROOT_HOW_TO: &str = "\
-# ModixFS — how to use this filesystem
+# LiveFolders — how to use this filesystem
 
 You are inside a virtual filesystem that exposes tools as files.
 Every tool is a directory. To use a tool, write to one of its endpoint files and then read the result.

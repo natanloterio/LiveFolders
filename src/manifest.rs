@@ -22,7 +22,7 @@ pub struct EnvDecl {
 
 impl Manifest {
     pub fn load(tool_dir: &Path) -> anyhow::Result<Option<Self>> {
-        let path = tool_dir.join("modix.yaml");
+        let path = tool_dir.join("livefolders.yaml");
         if !path.exists() {
             return Ok(None);
         }
@@ -77,9 +77,9 @@ env:
     }
 
     #[test]
-    fn load_from_dir_reads_modix_yaml() {
+    fn load_from_dir_reads_livefolders_yaml() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut f = std::fs::File::create(tmp.path().join("modix.yaml")).unwrap();
+        let mut f = std::fs::File::create(tmp.path().join("livefolders.yaml")).unwrap();
         writeln!(f, "name: testpkg\nversion: 1.0.0").unwrap();
         let m = Manifest::load(tmp.path()).unwrap().unwrap();
         assert_eq!(m.name.as_deref(), Some("testpkg"));

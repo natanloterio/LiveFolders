@@ -1,12 +1,12 @@
 [package]
-name = "modixfs"
+name = "livefolders"
 version = "0.3.1"
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/natanloterio/modixfs"
+repository = "https://github.com/natanloterio/livefolders"
 
 [[bin]]
-name = "modixfs"
+name = "livefolders"
 path = "src/main.rs"
 
 [dependencies]
