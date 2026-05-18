@@ -15,6 +15,7 @@ use tracing::debug;
 use crate::registry::{Session, ToolRegistry};
 
 use super::inode::*;
+use super::root_doc::ROOT_HOW_TO;
 
 const TTL: Duration = Duration::from_secs(1);
 
@@ -173,6 +174,9 @@ impl ModixFS {
                 let content = self.registry.read().unwrap().root_index();
                 Some(Self::file_attr(ROOT_INDEX_INO, content.len() as u64, 0o444))
             }
+            ROOT_HOW_TO_INO => {
+                Some(Self::file_attr(ROOT_HOW_TO_INO, ROOT_HOW_TO.len() as u64, 0o444))
+            }
             _ => {
                 // External inode (>= 100_000)?
                 if let Some(disk_path) = self.path_for_ino(ino) {
@@ -221,6 +225,9 @@ impl ModixFS {
     fn lookup_in_root(&self, name: &OsStr) -> Option<FileAttr> {
         let s = name.to_str()?;
         match s {
+            "how_to.md" => {
+                Some(Self::file_attr(ROOT_HOW_TO_INO, ROOT_HOW_TO.len() as u64, 0o444))
+            }
             "index.md" => {
                 let content = self.registry.read().unwrap().root_index();
                 Some(Self::file_attr(ROOT_INDEX_INO, content.len() as u64, 0o444))
@@ -415,6 +422,7 @@ impl Filesystem for ModixFS {
         }
 
         let data: Option<Vec<u8>> = match ino {
+            ROOT_HOW_TO_INO => Some(ROOT_HOW_TO.as_bytes().to_vec()),
             ROOT_INDEX_INO => Some(self.registry.read().unwrap().root_index().into_bytes()),
             _ => {
                 if let Some(idx) = self.tool_index_for_ino(ino) {
@@ -689,6 +697,7 @@ impl Filesystem for ModixFS {
 
         match ino {
             ROOT_INO => {
+                entries.push((ROOT_HOW_TO_INO, FileType::RegularFile, "how_to.md".to_string()));
                 entries.push((ROOT_INDEX_INO, FileType::RegularFile, "index.md".to_string()));
                 entries.push((TOOLS_DIR_INO, FileType::Directory, "tools".to_string()));
             }
