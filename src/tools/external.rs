@@ -140,15 +140,66 @@ impl Tool for ExternalTool {
 
     async fn invoke(&self, endpoint: &str, input: &[u8], _session: &Session) -> ToolResult {
         let script = self.endpoint_path(endpoint);
-        invoke_command(
-            script.to_str().unwrap_or(""),
-            input,
-            &self.name,
-            endpoint,
-            &self.dir,
-            self.timeout_secs,
-        )
-        .await
+
+        let mut child = match Command::new(&script)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .current_dir(&self.dir)
+            .env("LIVEFOLDERS_TOOL", &self.name)
+            .env("LIVEFOLDERS_ENDPOINT", endpoint)
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => return ToolResult::err(format!("failed to spawn {}: {}", script.display(), e)),
+        };
+
+        if let Some(mut stdin) = child.stdin.take() {
+            if let Err(e) = stdin.write_all(input).await {
+                return ToolResult::err(format!("failed to write stdin: {}", e));
+            }
+            let _ = stdin.flush().await;
+        }
+
+        use tokio::io::AsyncReadExt;
+        let mut stdout_handle = child.stdout.take();
+        let mut stderr_handle = child.stderr.take();
+
+        let read_out = async {
+            let mut buf = Vec::new();
+            if let Some(ref mut h) = stdout_handle {
+                let _ = h.read_to_end(&mut buf).await;
+            }
+            buf
+        };
+        let read_err = async {
+            let mut buf = Vec::new();
+            if let Some(ref mut h) = stderr_handle {
+                let _ = h.read_to_end(&mut buf).await;
+            }
+            buf
+        };
+
+        let wait_fut = async {
+            let (out_bytes, err_bytes) = tokio::join!(read_out, read_err);
+            child.wait().await.map(|status| (status, out_bytes, err_bytes))
+        };
+
+        match tokio::time::timeout(Duration::from_secs(self.timeout_secs), wait_fut).await {
+            Err(_) => {
+                let _ = child.kill().await;
+                ToolResult::err("timeout")
+            }
+            Ok(Err(e)) => ToolResult::err(format!("process error: {}", e)),
+            Ok(Ok((status, out_bytes, err_bytes))) => {
+                if status.success() {
+                    ToolResult::ok(out_bytes)
+                } else {
+                    let stderr = String::from_utf8_lossy(&err_bytes);
+                    ToolResult::err(stderr.trim().to_string())
+                }
+            }
+        }
     }
 }
 

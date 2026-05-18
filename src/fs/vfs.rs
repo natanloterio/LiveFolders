@@ -200,6 +200,18 @@ impl LiveFolders {
                         };
                         return Some(Self::file_attr(ino, size, perm));
                     }
+                    // Virtual file (no disk counterpart): check manifest for write_invoke / read_invoke.
+                    if let Some((_, _, spec)) = self.file_spec_for_ino(ino) {
+                        use crate::manifest::FileKind;
+                        match spec.kind {
+                            FileKind::WriteInvoke | FileKind::ReadInvoke => {
+                                let result_size = self.result_buf.lock().unwrap()
+                                    .get(&ino).map(|r| r.len()).unwrap_or(0) as u64;
+                                return Some(Self::file_attr(ino, result_size, 0o644));
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 // tool dir?
                 if let Some(idx) = self.tool_index_for_ino(ino) {
@@ -274,7 +286,12 @@ impl LiveFolders {
 
     fn manifest_for_tool(&self, tool_name: &str) -> Option<crate::manifest::Manifest> {
         let tools_dir = self.tools_dir.as_ref()?;
-        crate::manifest::Manifest::load(&tools_dir.join(tool_name)).ok().flatten()
+        let manifest = crate::manifest::Manifest::load(&tools_dir.join(tool_name)).ok().flatten()?;
+        if let Err(e) = manifest.validate() {
+            tracing::warn!("manifest for '{}' is invalid: {}", tool_name, e);
+            return None;
+        }
+        Some(manifest)
     }
 
     /// Given an external inode (>= 100_000), return (tool_name, file_name, FileSpec)
@@ -627,7 +644,8 @@ impl Filesystem for LiveFolders {
                         return;
                     }
                     FileKind::Readonly => {
-                        reply.error(libc::EACCES);
+                        // Write is blocked in write(); release() for a read-only open is a no-op.
+                        reply.ok();
                         return;
                     }
                 }
