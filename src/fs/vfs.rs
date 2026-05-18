@@ -498,7 +498,10 @@ impl Filesystem for ModixFS {
         let (tool_name, endpoint, tool) = {
             let registry = self.registry.read().unwrap();
             let tool_name = registry.list()[tool_idx].to_string();
-            let tool = registry.get(&tool_name).unwrap();
+            let tool = match registry.get(&tool_name) {
+                Some(t) => t,
+                None => { reply.ok(); return; }
+            };
             let endpoint = tool.endpoints()[ep_idx].to_string();
             (tool_name, endpoint, tool)
         };
@@ -668,7 +671,10 @@ impl Filesystem for ModixFS {
                             } else {
                                 // Built-in tool: use existing how_to.md + endpoints logic
                                 let reg = self.registry.read().unwrap();
-                                let tool = reg.get(&tool_name).unwrap();
+                                let tool = match reg.get(&tool_name) {
+                                    Some(t) => t,
+                                    None => { reply.ok(); return; }
+                                };
                                 entries.push((how_to_ino(idx), FileType::RegularFile, "how_to.md".to_string()));
                                 for (ei, ep) in tool.endpoints().iter().enumerate() {
                                     entries.push((endpoint_ino(idx, ei), FileType::RegularFile, ep.to_string()));
@@ -677,7 +683,10 @@ impl Filesystem for ModixFS {
                         } else {
                             // No tools_dir: all tools are built-in
                             let reg = self.registry.read().unwrap();
-                            let tool = reg.get(&tool_name).unwrap();
+                            let tool = match reg.get(&tool_name) {
+                                Some(t) => t,
+                                None => { reply.ok(); return; }
+                            };
                             entries.push((how_to_ino(idx), FileType::RegularFile, "how_to.md".to_string()));
                             for (ei, ep) in tool.endpoints().iter().enumerate() {
                                 entries.push((endpoint_ino(idx, ei), FileType::RegularFile, ep.to_string()));
