@@ -1,16 +1,141 @@
 # ModixFS
 
-A virtual filesystem alternative to MCP (Model Context Protocol). Instead of JSON-RPC and schema overhead, ModixFS exposes tools to LLMs as files — using `cat`, `echo`, and pipes that LLMs already know how to use.
+A virtual filesystem that exposes tools to LLMs as plain files. Instead of JSON-RPC and protocol overhead, LLMs use `cat`, `echo`, and pipes — an interface they already know.
 
 ```
-cat /tools/github/how_to.md                          # discover how to use a tool
+cat /tools/github/how_to.md
 echo "language:rust fuse stars:>100" > /tools/github/search_repos
-cat /tools/github/search_repos                       # read the results
+cat /tools/github/search_repos
 ```
 
-## Why
+---
 
-MCP requires a protocol layer (JSON-RPC), schema definitions, and a dedicated client. ModixFS uses the filesystem as the protocol — an interface every LLM already speaks natively.
+## Getting started
+
+### 1. Install
+
+**Linux**
+
+```bash
+sudo apt-get install fuse3
+curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-linux-x86_64 -o modixfs
+chmod +x modixfs && sudo mv modixfs /usr/local/bin/
+```
+
+**macOS** — install [macFUSE](https://osxfuse.github.io) first, then:
+
+```bash
+# Apple Silicon
+curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-macos-aarch64 -o modixfs
+# Intel
+curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-macos-x86_64 -o modixfs
+
+chmod +x modixfs && sudo mv modixfs /usr/local/bin/
+```
+
+**From source**
+
+```bash
+sudo apt-get install libfuse3-dev pkg-config  # Linux only
+cargo install --git https://github.com/natanloterio/modixfs
+```
+
+### 2. Init
+
+```bash
+modixfs init
+```
+
+Creates `tools.yaml` in the current directory:
+
+```yaml
+mount: /tmp/modixfs
+
+tools:
+  - name: echo
+  - name: github
+    token_env: GITHUB_TOKEN
+```
+
+### 3. Install a tool
+
+```bash
+modixfs install github.com/someone/their-modixfs-tool
+```
+
+This downloads the tool, reads its `modix.yaml`, prompts for any required secrets, and stores them in `~/.config/modixfs/secrets.env`.
+
+### 4. Mount
+
+```bash
+modixfs mount
+```
+
+Secrets from `~/.config/modixfs/secrets.env` are loaded automatically. The filesystem is live at the path set in `tools.yaml`.
+
+### 5. Use it
+
+```bash
+ls /tmp/modixfs/tools/          # see all tools
+cat /tmp/modixfs/tools/index.md # read tool descriptions
+
+cat /tmp/modixfs/tools/github/how_to.md
+echo "tokio stars:>1000" > /tmp/modixfs/tools/github/search_repos
+sleep 2
+cat /tmp/modixfs/tools/github/search_repos
+```
+
+Point your LLM agent at the mount path. It can discover, read, and invoke tools with standard file operations.
+
+---
+
+## Built-in tools
+
+### `echo`
+
+Reflects input back as output. Useful for smoke-testing the filesystem.
+
+```bash
+echo "hello" > /tmp/modixfs/tools/echo/send
+cat /tmp/modixfs/tools/echo/send   # → hello
+```
+
+### `github`
+
+Searches GitHub using the [Search API](https://docs.github.com/en/search-github). Requires `GITHUB_TOKEN`.
+
+| Endpoint | What to write |
+|---|---|
+| `search_repos` | GitHub search query (e.g. `language:rust stars:>100`) |
+| `search_code` | Code search query (e.g. `async fn main repo:tokio-rs/tokio`) |
+
+---
+
+## Advanced
+
+### How it works
+
+Every tool appears as a directory under `/tools/<name>/`. Writing to an endpoint file invokes the tool; reading retrieves the result. The result is cleared after reading.
+
+```
+/tools/
+├── index.md              ← lists all tools and descriptions
+├── github/
+│   ├── how_to.md         ← LLM reads this to understand the tool
+│   ├── search_repos      ← write query → read results
+│   └── search_code
+└── echo/
+    ├── how_to.md
+    └── send
+```
+
+State machine per endpoint:
+
+```
+IDLE → write(input) → invoke() → COMPLETE → read() → IDLE
+```
+
+**vs MCP**
 
 | | MCP | ModixFS |
 |---|---|---|
@@ -21,201 +146,83 @@ MCP requires a protocol layer (JSON-RPC), schema definitions, and a dedicated cl
 | Result | JSON response | File read |
 | Composition | Limited | Shell pipes |
 
-## Install
+---
 
-### Linux
+### External tools
 
-```bash
-sudo apt-get install fuse3
+Build a ModixFS tool without writing Rust — any language, any script.
 
-curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-linux-x86_64 -o modixfs
-chmod +x modixfs && sudo mv modixfs /usr/local/bin/
-```
-
-### macOS
-
-Install [macFUSE](https://osxfuse.github.io) first, then:
-
-```bash
-# Apple Silicon
-curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-macos-aarch64 -o modixfs
-
-# Intel
-curl -L https://github.com/natanloterio/modixfs/releases/latest/download/modixfs-macos-x86_64 -o modixfs
-
-chmod +x modixfs && sudo mv modixfs /usr/local/bin/
-```
-
-### From source
-
-```bash
-sudo apt-get install libfuse3-dev pkg-config  # Linux only
-cargo install --git https://github.com/natanloterio/modixfs
-```
-
-## Quick start
-
-```bash
-# 1. Create a tools.yaml in your project
-modixfs init
-
-# 2. Edit tools.yaml to enable the tools you want and set tools_dir
-
-# 3. Install a tool (prompts for secrets, stores them automatically)
-modixfs install github.com/someone/their-modixfs-tool
-
-# 4. Mount — secrets are loaded from ~/.config/modixfs/secrets.env automatically
-modixfs mount
-```
-
-The filesystem is now live. Point your LLM agent at it.
-
-## Installing tools
-
-```bash
-modixfs install github.com/someone/their-modixfs-tool
-```
-
-The installer will:
-1. Download the tool from GitHub (no `git` required)
-2. Read its `modix.yaml` to find required env vars
-3. Prompt you for any missing secrets and store them in `~/.config/modixfs/secrets.env`
-4. Copy the tool into your `tools_dir`
-
-`modixfs mount` loads secrets automatically at startup — no manual `export` needed.
-
-Secrets are stored in `~/.config/modixfs/secrets.env` (created with `chmod 600`). You can also edit it directly:
-
-```
-# ~/.config/modixfs/secrets.env
-MYTOOL_API_KEY=sk-...
-GITHUB_TOKEN=ghp_...
-```
-
-Shell environment always wins — existing env vars are never overwritten by the file.
-
-For tools in a subdirectory of a repo:
-
-```bash
-modixfs install github.com/owner/repo/tree/main/mytool
-```
-
-## Configuration
-
-`tools.yaml` (created by `modixfs init`):
-
-```yaml
-mount: /tmp/modixfs   # where to mount
-
-tools:
-  - name: echo        # always available, useful for testing
-
-  - name: github
-    token_env: GITHUB_TOKEN   # env var holding the token (this is the default)
-```
-
-Override the mount path at runtime:
-
-```bash
-modixfs mount /my/custom/path
-modixfs mount --config /path/to/other.yaml
-```
-
-## How it works
-
-Each tool exposes a directory under `/tools/<name>/`:
-
-```
-/tools/
-├── index.md              ← lists all available tools
-├── github/
-│   ├── how_to.md         ← usage instructions (LLM reads this)
-│   ├── search_repos      ← write query → read results
-│   └── search_code
-└── echo/
-    ├── how_to.md
-    └── send
-```
-
-Write to an endpoint to invoke it. Read to get the result. The result is cleared after reading, ready for the next invocation.
-
-```bash
-echo "tokio async runtime stars:>1000" > /tools/github/search_repos
-sleep 2
-cat /tools/github/search_repos
-```
-
-## Built-in tools
-
-### `echo`
-Reflects input back as output. Useful for verifying the filesystem is working.
-
-### `github`
-Searches GitHub using the [GitHub Search API](https://docs.github.com/en/search-github).
-
-| Endpoint | Description |
-|---|---|
-| `search_repos` | Search repositories |
-| `search_code` | Search code across GitHub |
-
-Requires `GITHUB_TOKEN`.
-
-## External tools
-
-Any developer can build a ModixFS tool without writing Rust. Create a directory
-in your `tools_dir` and add scripts — no recompile, no restart required.
-
-### Directory convention
+**Directory layout**
 
 ```
 ~/.config/modixfs/tools/
 └── mytool/
-    ├── how_to.md        ← LLM reads this to learn the tool
-    ├── search           ← executable: write to invoke, read for result
-    ├── output.csv       ← passthrough: LLM reads this file directly
-    └── config.json      ← passthrough: LLM can write to configure the tool
+    ├── how_to.md     ← LLM reads this (read-only, served from disk)
+    ├── search        ← executable: stdin = what LLM wrote, stdout = result
+    ├── output.csv    ← regular file: passthrough read/write to disk
+    └── config.json   ← regular file: LLM can write config directly
 ```
 
-### File behavior
+**File behavior**
 
-| File | Behavior |
+| File type | Behavior |
 |---|---|
-| `how_to.md` | Read-only docs served directly from disk |
-| Executable (`chmod +x`) | Write → stdin. Stdout → result on next read. |
-| Regular file | Passthrough to disk. Reads and writes go directly to the file. |
+| `how_to.md` | Served read-only from disk |
+| Executable (`chmod +x`) | Write triggers invocation. Stdout becomes the next read result. |
+| Regular file | Passthrough — reads and writes go directly to disk |
 
-### Subprocess environment
+**Script environment**
 
-Scripts receive:
-- `stdin` — what the LLM wrote to the endpoint
-- `MODIXFS_TOOL` — tool name
-- `MODIXFS_ENDPOINT` — endpoint name
-- All env vars set when `modixfs` was launched
+Every executable receives:
 
-### Hot-reload
+- `stdin` — the bytes the LLM wrote
+- `MODIXFS_TOOL` — tool directory name
+- `MODIXFS_ENDPOINT` — endpoint filename
+- All env vars present when `modixfs` was launched (including secrets)
 
-ModixFS watches `tools_dir` with inotify/kqueue. Adding or removing a tool directory takes effect immediately — no restart required.
+**Example script**
 
-### Enable in tools.yaml
+```bash
+#!/bin/bash
+# ~/.config/modixfs/tools/weather/forecast
+curl -s "https://wttr.in/$(cat -)?format=3"
+```
+
+```bash
+chmod +x ~/.config/modixfs/tools/weather/forecast
+# tool appears immediately — no restart needed
+```
+
+**Enable in tools.yaml**
 
 ```yaml
 tools_dir: ~/.config/modixfs/tools
-timeout: 30   # seconds before an endpoint invocation is killed
+timeout: 30   # seconds before a subprocess is killed
 ```
 
-### The LLM can create tools too
+**Hot-reload**
 
-```bash
-mkdir /tools/mytool
-echo "# My Tool" > /tools/mytool/how_to.md
-printf '#!/bin/bash\ncurl -s https://api.example.com -d "$(cat -)"\n' > /tools/mytool/fetch
-chmod +x /tools/mytool/fetch
-# tool is immediately live — no restart needed
+ModixFS watches `tools_dir` with inotify (Linux) / kqueue (macOS). Adding or removing a tool directory is picked up immediately.
+
+---
+
+### Secrets management
+
+`modixfs install` stores secrets in `~/.config/modixfs/secrets.env` (mode `0600`). You can also edit it manually:
+
+```
+# ~/.config/modixfs/secrets.env
+GITHUB_TOKEN=ghp_...
+MYTOOL_API_KEY=sk-...
 ```
 
-## Publishing a tool (`modix.yaml`)
+`modixfs mount` loads this file at startup. Shell environment always takes precedence — existing env vars are never overwritten.
 
-To make your tool installable, add a `modix.yaml` to its directory:
+---
+
+### Publishing a tool
+
+Add `modix.yaml` to your tool directory to make it installable with a single command:
 
 ```yaml
 name: mytool
@@ -231,15 +238,20 @@ env:
     default: "30"
 ```
 
-All fields are optional — a tool without `modix.yaml` installs fine, just without prompts. The `env` list is the most useful part: `required: true` vars trigger an interactive prompt at install time so users don't have to discover them from the README.
+`required: true` vars trigger an interactive prompt at install time. Tools without `modix.yaml` install fine — just without prompts.
 
-Push your tool directory to a public GitHub repo and share:
+Push to a public GitHub repo and share:
 
-```
+```bash
 modixfs install github.com/you/your-tool
+
+# For a tool inside a subdirectory
+modixfs install github.com/owner/repo/tree/main/mytool
 ```
 
-## Adding tools
+---
+
+### Adding a built-in tool (Rust)
 
 Implement the `Tool` trait:
 
@@ -260,24 +272,23 @@ Register it in `main.rs`:
 registry.register(Arc::new(MyTool::new()));
 ```
 
-## Architecture
+---
+
+### Architecture
 
 ```
 LLM Agent
-    │ read/write syscalls
+    │  read / write syscalls
 ModixFS (FUSE)
-    ├── Virtual File Router   (path → inode mapping)
-    └── Tool Registry         (Tool trait + Session state)
+    ├── Virtual File Router     path → inode mapping
+    ├── Tool Registry           Tool trait + hot-reload watcher
+    └── Secrets Loader          ~/.config/modixfs/secrets.env → process env
             │
     Tool Implementations
-    (async HTTP, shell, anything)
+    (async HTTP, subprocess, passthrough files)
 ```
 
-State machine per endpoint file:
-
-```
-IDLE → write(input) → invoke() → COMPLETE → read() → IDLE
-```
+---
 
 ## License
 
