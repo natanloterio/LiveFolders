@@ -44,6 +44,9 @@ fn main() -> Result<()> {
         )
         .init();
 
+    secrets::load_secrets_env()
+        .unwrap_or_else(|e| tracing::warn!("could not load secrets.env: {}", e));
+
     let args: Vec<String> = std::env::args().collect();
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
 
@@ -114,8 +117,6 @@ fn load_config_for_install(args: &[String]) -> Config {
 }
 
 fn cmd_mount(args: &[String]) -> Result<()> {
-    secrets::load_secrets_env()
-        .unwrap_or_else(|e| tracing::warn!("could not load secrets.env: {}", e));
     let (cli_mount, config_path) = parse_mount_args(args);
 
     let cfg = match config_path {
@@ -240,8 +241,8 @@ fn parse_mount_args(args: &[String]) -> (Option<PathBuf>, Option<PathBuf>) {
                     config = Some(PathBuf::from(&args[i]));
                 }
             }
-            // skip "mount" subcommand token itself
-            "mount" => {}
+            // skip "mount" and "install" subcommand tokens themselves
+            "mount" | "install" => {}
             arg if !arg.starts_with('-') => {
                 mount = Some(PathBuf::from(arg));
             }
