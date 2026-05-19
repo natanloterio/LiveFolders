@@ -151,12 +151,8 @@ mod tests {
 
     #[test]
     fn check_tools_dir_fails_when_dir_missing() {
-        let cfg = Config {
-            mount: None,
-            tools_dir: Some(std::path::PathBuf::from("/nonexistent/path/tools")),
-            timeout_secs: 30,
-            tools: vec![],
-        };
+        let mut cfg = Config::default_config();
+        cfg.tools_dir = Some(std::path::PathBuf::from("/nonexistent/path/tools"));
         let result = check_tools_dir(&cfg);
         assert!(!result.ok);
     }

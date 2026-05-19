@@ -415,12 +415,22 @@ pub struct ExternalTool {
     name: String,
     dir: PathBuf,
     timeout_secs: u64,
+    sandbox_mode: crate::sandbox::SandboxMode,
     description_cache: std::sync::OnceLock<String>,
 }
 
 impl ExternalTool {
     pub fn new(name: impl Into<String>, dir: PathBuf, timeout_secs: u64) -> Self {
-        Self { name: name.into(), dir, timeout_secs, description_cache: std::sync::OnceLock::new() }
+        Self::with_sandbox_mode(name, dir, timeout_secs, crate::sandbox::SandboxMode::default())
+    }
+
+    pub fn with_sandbox_mode(
+        name: impl Into<String>,
+        dir: PathBuf,
+        timeout_secs: u64,
+        sandbox_mode: crate::sandbox::SandboxMode,
+    ) -> Self {
+        Self { name: name.into(), dir, timeout_secs, sandbox_mode, description_cache: std::sync::OnceLock::new() }
     }
 
     fn endpoint_path(&self, endpoint: &str) -> PathBuf {
@@ -504,7 +514,7 @@ impl Tool for ExternalTool {
         let handler = self.endpoint_path(endpoint).to_string_lossy().to_string();
         let sandbox = crate::sandbox::build(
             manifest.as_ref().and_then(|m| m.sandbox.as_ref()),
-            crate::sandbox::SandboxMode::default(),
+            self.sandbox_mode,
         );
         invoke_command_sandboxed(
             &handler, input, &self.name, endpoint,
