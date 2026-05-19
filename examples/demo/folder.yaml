@@ -1,5 +1,5 @@
 name: demo
-description: Demonstrates all four LiveFolders file behavior types.
+description: Demonstrates all LiveFolders file behavior types, including validated input schemas.
 
 files:
   - name: shout
