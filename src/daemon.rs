@@ -49,7 +49,7 @@ pub fn daemonize(mountpoint: &Path) -> Result<()> {
                 libc::close(log_fd);
                 // Redirect stdout to /dev/null so daemon is silent
                 let devnull = libc::open(
-                    b"/dev/null\0".as_ptr() as *const libc::c_char,
+                    c"/dev/null".as_ptr(),
                     libc::O_WRONLY,
                 );
                 libc::dup2(devnull, libc::STDOUT_FILENO);

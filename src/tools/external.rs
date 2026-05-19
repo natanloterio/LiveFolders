@@ -110,11 +110,10 @@ pub async fn invoke_command_validated(
     timeout_secs: u64,
     schema: Option<&InputSchema>,
 ) -> ToolResult {
-    if let Some(s) = schema {
-        if let Err(e) = validate_input(input, s) {
+    if let Some(s) = schema
+        && let Err(e) = validate_input(input, s) {
             return ToolResult::err(e);
         }
-    }
     invoke_command(handler, input, tool_name, endpoint, cwd, timeout_secs).await
 }
 
@@ -149,6 +148,7 @@ impl ExternalTool {
         manifest.description
     }
 
+    #[allow(dead_code)]
     pub fn endpoints_from_disk(&self) -> Vec<String> {
         let Ok(entries) = std::fs::read_dir(&self.dir) else { return vec![] };
         let mut eps = vec![];
@@ -195,11 +195,10 @@ impl Tool for ExternalTool {
             .flatten()
             .and_then(|m| m.spec_for(endpoint).and_then(|s| s.input.clone()));
 
-        if let Some(ref s) = schema {
-            if let Err(e) = validate_input(input, s) {
+        if let Some(ref s) = schema
+            && let Err(e) = validate_input(input, s) {
                 return ToolResult::err(e);
             }
-        }
 
         let script = self.endpoint_path(endpoint);
 

@@ -103,7 +103,7 @@ impl LiveFolders {
     }
 
     fn tool_index_for_ino(&self, ino: u64) -> Option<usize> {
-        if ino < 1000 || ino >= 100_000 {
+        if !(1000..100_000).contains(&ino) {
             return None;
         }
         let idx = ((ino - 1000) / 100) as usize;
@@ -155,7 +155,7 @@ impl LiveFolders {
         FileAttr {
             ino,
             size,
-            blocks: (size + 511) / 512,
+            blocks: size.div_ceil(512),
             atime: UNIX_EPOCH,
             mtime: UNIX_EPOCH,
             ctime: UNIX_EPOCH,
@@ -187,15 +187,12 @@ impl LiveFolders {
                 if let Some(disk_path) = self.path_for_ino(ino) {
                     // If the disk file is absent but is named how_to.md, generate from folder.yaml.
                     if !disk_path.exists()
-                        && disk_path.file_name().map_or(false, |n| n == "how_to.md")
-                    {
-                        if let Some(tool_dir) = disk_path.parent() {
-                            if let Ok(Some(manifest)) = crate::manifest::Manifest::load(tool_dir) {
+                        && disk_path.file_name().is_some_and(|n| n == "how_to.md")
+                        && let Some(tool_dir) = disk_path.parent()
+                            && let Ok(Some(manifest)) = crate::manifest::Manifest::load(tool_dir) {
                                 let content = crate::fs::how_to_gen::generate_how_to(&manifest);
                                 return Some(Self::file_attr(ino, content.len() as u64, 0o444));
                             }
-                        }
-                    }
                     if let Ok(meta) = std::fs::metadata(&disk_path) {
                         use std::os::unix::fs::PermissionsExt;
                         let mode = meta.permissions().mode();
@@ -326,8 +323,8 @@ impl LiveFolders {
 
         // For virtual files (write_invoke / read_invoke) declared in the manifest,
         // synthesize an attr without requiring a disk file.
-        if let Some(manifest) = self.manifest_for_tool(tool_name) {
-            if let Some(spec) = manifest.spec_for(name) {
+        if let Some(manifest) = self.manifest_for_tool(tool_name)
+            && let Some(spec) = manifest.spec_for(name) {
                 match spec.kind {
                     FileKind::WriteInvoke | FileKind::ReadInvoke => {
                         let ino = self.ino_for_path(&disk_path);
@@ -340,16 +337,14 @@ impl LiveFolders {
                     }
                 }
             }
-        }
 
         // Fallback: if how_to.md is absent on disk but folder.yaml exists, synthesize attr.
-        if name == "how_to.md" && !disk_path.exists() {
-            if let Ok(Some(manifest)) = crate::manifest::Manifest::load(&tools_dir.join(tool_name)) {
+        if name == "how_to.md" && !disk_path.exists()
+            && let Ok(Some(manifest)) = crate::manifest::Manifest::load(&tools_dir.join(tool_name)) {
                 let content = crate::fs::how_to_gen::generate_how_to(&manifest);
                 let ino = self.ino_for_path(&disk_path);
                 return Some(Self::file_attr(ino, content.len() as u64, 0o444));
             }
-        }
 
         let meta = std::fs::metadata(&disk_path).ok()?;
         let ino = self.ino_for_path(&disk_path);
@@ -446,13 +441,12 @@ impl Filesystem for LiveFolders {
         reply: ReplyAttr,
     ) {
         // Write permissions to disk for external files
-        if let Some(mode) = mode {
-            if let Some(disk_path) = self.path_for_ino(ino) {
+        if let Some(mode) = mode
+            && let Some(disk_path) = self.path_for_ino(ino) {
                 use std::os::unix::fs::PermissionsExt;
                 let perms = std::fs::Permissions::from_mode(mode);
                 let _ = std::fs::set_permissions(&disk_path, perms);
             }
-        }
 
         // Handle truncation on O_TRUNC open (e.g. shell `>` redirect)
         if let Some(new_size) = size {
@@ -463,11 +457,10 @@ impl Filesystem for LiveFolders {
             if is_virtual_endpoint {
                 self.write_buf.lock().unwrap().entry(ino).or_default().truncate(new_size as usize);
                 self.result_buf.lock().unwrap().remove(&ino);
-            } else if let Some(disk_path) = self.path_for_ino(ino) {
-                if new_size == 0 {
+            } else if let Some(disk_path) = self.path_for_ino(ino)
+                && new_size == 0 {
                     let _ = std::fs::write(&disk_path, b"");
                 }
-            }
         }
         match self.resolve_ino_attr(ino) {
             Some(a) => reply.attr(&TTL, &a),
@@ -476,13 +469,12 @@ impl Filesystem for LiveFolders {
     }
 
     fn open(&mut self, _req: &Request, ino: u64, _flags: i32, reply: ReplyOpen) {
-        if let Some((_, _, spec)) = self.file_spec_for_ino(ino) {
-            if matches!(spec.kind, FileKind::ReadInvoke) {
+        if let Some((_, _, spec)) = self.file_spec_for_ino(ino)
+            && matches!(spec.kind, FileKind::ReadInvoke) {
                 // Bypass kernel page cache so read() is always called even when reported size=0.
                 reply.opened(0, fuser::consts::FOPEN_DIRECT_IO);
                 return;
             }
-        }
         reply.opened(0, 0);
     }
 
@@ -556,10 +548,9 @@ impl Filesystem for LiveFolders {
             // No manifest entry or passthrough/readonly: read from disk.
             // If the file doesn't exist but is named how_to.md, generate from folder.yaml.
             if !disk_path.exists()
-                && disk_path.file_name().map_or(false, |n| n == "how_to.md")
-            {
-                if let Some(tool_dir) = disk_path.parent() {
-                    if let Ok(Some(manifest)) = crate::manifest::Manifest::load(tool_dir) {
+                && disk_path.file_name().is_some_and(|n| n == "how_to.md")
+                && let Some(tool_dir) = disk_path.parent()
+                    && let Ok(Some(manifest)) = crate::manifest::Manifest::load(tool_dir) {
                         let content = crate::fs::how_to_gen::generate_how_to(&manifest);
                         let data = content.into_bytes();
                         let start = offset as usize;
@@ -567,8 +558,6 @@ impl Filesystem for LiveFolders {
                         reply.data(if start < data.len() { &data[start..end] } else { b"" });
                         return;
                     }
-                }
-            }
             match std::fs::read(&disk_path) {
                 Ok(bytes) => {
                     reply_bytes(reply, &bytes, offset, size);
@@ -713,9 +702,9 @@ impl Filesystem for LiveFolders {
             }
             // Executable with no manifest: invoke via ExternalTool (existing behavior).
             let input = self.write_buf.lock().unwrap().remove(&ino).unwrap_or_default();
-            if !input.is_empty() {
-                if let Some(tools_dir) = self.tools_dir.clone() {
-                    if let Ok(rel) = disk_path.strip_prefix(&tools_dir) {
+            if !input.is_empty()
+                && let Some(tools_dir) = self.tools_dir.clone()
+                    && let Ok(rel) = disk_path.strip_prefix(&tools_dir) {
                         let parts: Vec<_> = rel.components().collect();
                         if parts.len() >= 2 {
                             let tool_name = parts[0].as_os_str().to_string_lossy().to_string();
@@ -735,8 +724,6 @@ impl Filesystem for LiveFolders {
                             }
                         }
                     }
-                }
-            }
             reply.ok();
             return;
         }
@@ -932,13 +919,12 @@ impl Filesystem for LiveFolders {
                                 }
                                 // Synthesize how_to.md if the tool has a folder.yaml but no how_to.md on disk.
                                 let has_how_to = entries.iter().any(|(_, _, n)| n == "how_to.md");
-                                if !has_how_to {
-                                    if let Ok(Some(_)) = crate::manifest::Manifest::load(&tool_path) {
+                                if !has_how_to
+                                    && let Ok(Some(_)) = crate::manifest::Manifest::load(&tool_path) {
                                         let how_to_path = tool_path.join("how_to.md");
                                         let child_ino = self.ino_for_path(&how_to_path);
                                         entries.push((child_ino, FileType::RegularFile, "how_to.md".to_string()));
                                     }
-                                }
                                 // Merge manifest-declared virtual files (may not exist on disk).
                                 if let Some(manifest) = self.manifest_for_tool(&tool_name) {
                                     for spec in &manifest.files {

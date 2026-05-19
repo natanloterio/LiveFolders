@@ -194,8 +194,8 @@ fn cmd_mount(args: &[String]) -> Result<()> {
     let rt = Runtime::new()?;
     let handle = rt.handle().clone();
 
-    if let Some(ref td) = tools_dir {
-        if td.exists() {
+    if let Some(ref td) = tools_dir
+        && td.exists() {
             let _guard = rt.enter();
             if let Err(e) = watcher::spawn_watcher(td.clone(), Arc::clone(&registry), cfg.timeout_secs) {
                 warn!("hot-reload watcher failed to start: {}", e);
@@ -203,7 +203,6 @@ fn cmd_mount(args: &[String]) -> Result<()> {
                 info!("hot-reload watcher started");
             }
         }
-    }
 
     let fs = LiveFolders::new(registry, tools_dir, session, handle, cfg.timeout_secs);
     fuser::mount2(fs, &mountpoint, &options)?;

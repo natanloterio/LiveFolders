@@ -39,6 +39,7 @@ pub struct FileSpec {
 pub struct Manifest {
     pub name: Option<String>,
     pub description: Option<String>,
+    #[allow(dead_code)]
     pub version: Option<String>,
     #[serde(default)]
     pub env: Vec<EnvDecl>,
