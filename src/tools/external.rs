@@ -261,6 +261,7 @@ pub async fn invoke_pipe(
     tool_name: &str,
     cwd: &Path,
     timeout_secs: u64,
+    sandbox: &dyn crate::sandbox::Sandbox,
 ) -> ToolResult {
     let mut current: Vec<u8> = initial_input.to_vec();
     let mut total_ms = 0u64;
@@ -268,18 +269,16 @@ pub async fn invoke_pipe(
 
     for stage_name in stages {
         let spec = manifest.spec_for(stage_name);
-        if let Some(s) = spec.and_then(|s| s.input.as_ref()) {
-            if let Err(e) = validate_input(&current, s) {
-                return ToolResult::err(e);
-            }
-        }
+        let schema = spec.and_then(|s| s.input.as_ref());
         let state_file = spec
             .and_then(|s| s.state_file.as_deref())
             .map(|sf| cwd.join(sf));
         let handler = cwd.join(stage_name).to_string_lossy().to_string();
-        let result = invoke_command(
+        let result = invoke_command_sandboxed(
             &handler, &current, tool_name, stage_name,
             cwd, timeout_secs, state_file.as_deref(),
+            schema,
+            sandbox,
         ).await;
         total_ms += result.duration_ms;
         last_stderr = result.stderr.clone();
@@ -420,6 +419,7 @@ pub struct ExternalTool {
 }
 
 impl ExternalTool {
+    #[allow(dead_code)]
     pub fn new(name: impl Into<String>, dir: PathBuf, timeout_secs: u64) -> Self {
         Self::with_sandbox_mode(name, dir, timeout_secs, crate::sandbox::SandboxMode::default())
     }
@@ -502,7 +502,11 @@ impl Tool for ExternalTool {
                 Some(m) => m,
                 None => return ToolResult::err("[ERROR:SPAWN] manifest not found"),
             };
-            return invoke_pipe(stages, input, &m, &self.name, &self.dir, self.timeout_secs).await;
+            let sandbox = crate::sandbox::build(
+                m.sandbox.as_ref(),
+                self.sandbox_mode,
+            );
+            return invoke_pipe(stages, input, &m, &self.name, &self.dir, self.timeout_secs, sandbox.as_ref()).await;
         }
 
         let schema = spec.as_ref().and_then(|s| s.input.as_ref());
@@ -677,10 +681,12 @@ mod tests {
             ("upper", "tr a-z A-Z"),
             ("trim",  "tr -d '\\n'"),
         ], "process");
+        let sandbox = crate::sandbox::build(None, crate::sandbox::SandboxMode::Disabled);
         let result = invoke_pipe(
             manifest.spec_for("process").unwrap().pipe.as_ref().unwrap(),
             b"hello",
             &manifest, "pipetool", tmp.path(), 10,
+            sandbox.as_ref(),
         ).await;
         assert!(!result.is_error(), "got: {:?}", result.error);
         assert_eq!(result.output, b"HELLO");
@@ -693,10 +699,12 @@ mod tests {
             ("fail",   "exit 1"),
             ("should_not_run", "cat"),
         ], "broken");
+        let sandbox = crate::sandbox::build(None, crate::sandbox::SandboxMode::Disabled);
         let result = invoke_pipe(
             manifest.spec_for("broken").unwrap().pipe.as_ref().unwrap(),
             b"input",
             &manifest, "pipetool", tmp.path(), 10,
+            sandbox.as_ref(),
         ).await;
         assert!(result.is_error());
         assert!(result.error.as_ref().unwrap().starts_with("[ERROR:HANDLER]"), "got: {:?}", result.error);
@@ -710,10 +718,12 @@ mod tests {
             ("b", "cat"),
             ("c", "cat"),
         ], "chain");
+        let sandbox = crate::sandbox::build(None, crate::sandbox::SandboxMode::Disabled);
         let result = invoke_pipe(
             manifest.spec_for("chain").unwrap().pipe.as_ref().unwrap(),
             b"data",
             &manifest, "pipetool", tmp.path(), 10,
+            sandbox.as_ref(),
         ).await;
         assert!(!result.is_error());
         assert_eq!(result.output, b"data");

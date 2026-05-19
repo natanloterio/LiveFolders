@@ -24,6 +24,8 @@ impl Sandbox for MacOsSandbox {
                 cmd.arg("-c").arg(
                     "echo '[ERROR:SANDBOX] sandbox-exec not found; strict mode refuses to run' >&2; exit 1"
                 );
+            } else if self.mode == SandboxMode::Warn {
+                tracing::warn!("sandbox-exec not found; macOS tool isolation disabled");
             }
             return;
         }

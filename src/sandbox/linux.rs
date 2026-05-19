@@ -82,11 +82,16 @@ fn apply_landlock(
             std::io::ErrorKind::Unsupported,
             format!("Landlock not available: {e}"),
         )),
-        Err(_) => return Ok(()),
+        Err(_) => {
+            if mode == SandboxMode::Warn {
+                tracing::warn!("Landlock not available or partially enforced; filesystem isolation degraded");
+            }
+            return Ok(());
+        }
     };
 
     let read_access = AccessFs::from_read(abi);
-    let write_access = AccessFs::from_all(abi);
+    let write_access = AccessFs::from_write(abi);
 
     // Collect only the rules for paths that exist and can be opened.
     // add_rules requires E: From<RulesetError>, so we use RulesetError as the error type.
@@ -120,12 +125,22 @@ fn apply_landlock(
             std::io::ErrorKind::Unsupported,
             "Landlock not fully enforced; refusing in strict mode",
         )),
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            if mode == SandboxMode::Warn {
+                tracing::warn!("Landlock not available or partially enforced; filesystem isolation degraded");
+            }
+            Ok(())
+        }
         Err(e) if mode == SandboxMode::Strict => Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             format!("Landlock restrict_self failed: {e}"),
         )),
-        Err(_) => Ok(()),
+        Err(_) => {
+            if mode == SandboxMode::Warn {
+                tracing::warn!("Landlock not available or partially enforced; filesystem isolation degraded");
+            }
+            Ok(())
+        }
     }
 }
 
@@ -145,6 +160,9 @@ fn apply_seccomp_block_socket(mode: SandboxMode) -> std::io::Result<()> {
                     std::io::ErrorKind::Unsupported,
                     format!("seccomp: unsupported arch: {e}"),
                 ));
+            }
+            if mode == SandboxMode::Warn {
+                tracing::warn!("seccomp socket filter failed; network isolation not applied");
             }
             return Ok(());
         }
@@ -169,7 +187,12 @@ fn apply_seccomp_block_socket(mode: SandboxMode) -> std::io::Result<()> {
         Err(e) if mode == SandboxMode::Strict => Err(
             std::io::Error::new(std::io::ErrorKind::Unsupported, format!("seccomp init: {e}"))
         ),
-        Err(_) => Ok(()),
+        Err(_) => {
+            if mode == SandboxMode::Warn {
+                tracing::warn!("seccomp socket filter failed; network isolation not applied");
+            }
+            Ok(())
+        }
     }
 }
 

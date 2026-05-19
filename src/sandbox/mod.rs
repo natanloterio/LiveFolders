@@ -31,11 +31,6 @@ pub const DEFAULT_READ_PATHS: &[&str] = &[
     "/etc/nsswitch.conf", "/etc/hosts", "/tmp",
 ];
 
-/// Built-in default executable paths allowed for every tool.
-pub const DEFAULT_EXEC_PATHS: &[&str] = &[
-    "/usr/bin", "/bin", "/usr/local/bin",
-];
-
 /// Returns the active sandbox implementation for the current platform.
 pub fn build(_spec: Option<&SandboxSpec>, mode: SandboxMode) -> Box<dyn Sandbox> {
     if mode == SandboxMode::Disabled {
