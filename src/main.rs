@@ -170,8 +170,6 @@ fn cmd_mount(args: &[String]) -> Result<()> {
     let registry = Arc::new(RwLock::new(registry));
 
     let session = Session::new();
-    let rt = Runtime::new()?;
-    let handle = rt.handle().clone();
 
     let options = vec![
         MountOption::RW,
@@ -189,6 +187,11 @@ fn cmd_mount(args: &[String]) -> Result<()> {
         daemon::daemonize(&mountpoint)?;
         // Only the child process reaches here
     }
+
+    // Create the Tokio runtime after any fork so background threads survive.
+    // Tokio is not fork-safe: threads created before fork() are dead in the child.
+    let rt = Runtime::new()?;
+    let handle = rt.handle().clone();
 
     if let Some(ref td) = tools_dir {
         if td.exists() {

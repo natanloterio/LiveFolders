@@ -97,6 +97,8 @@ Logs go to `~/.local/share/livefolders/livefolders.log`.
 
 If something looks wrong, run `livefolders doctor` — it checks FUSE, your config, and every installed tool's `folder.yaml` and prints actionable fixes.
 
+Handler timeouts are enforced in both foreground and daemon modes. A handler that hangs is killed after `timeout` seconds (default 30), and the endpoint returns an error string — the filesystem never freezes.
+
 ---
 
 ## Installing tools
