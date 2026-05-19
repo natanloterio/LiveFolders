@@ -5,3 +5,7 @@ files:
   - name: shout
     type: write_invoke
     handler: "tr '[:lower:]' '[:upper:]'"
+    input:
+      type: string
+      min_length: 1
+      max_length: 500

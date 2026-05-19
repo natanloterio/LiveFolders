@@ -1,0 +1,16 @@
+name: search
+description: Search endpoint with structural input validation.
+
+files:
+  - name: search
+    type: write_invoke
+    handler: "jq -r '.query'"
+    input:
+      type: json
+      schema:
+        required: [query]
+        properties:
+          query:
+            type: string
+          limit:
+            type: number

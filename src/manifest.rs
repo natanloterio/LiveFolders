@@ -23,6 +23,24 @@ pub enum InputKind {
 pub struct InputSchema {
     #[serde(rename = "type")]
     pub kind: InputKind,
+    /// Minimum character count (string inputs only).
+    #[serde(default)]
+    pub min_length: Option<usize>,
+    /// Maximum character count (string inputs only).
+    #[serde(default)]
+    pub max_length: Option<usize>,
+    /// Regex pattern the full input must match (string inputs only).
+    #[serde(default)]
+    pub pattern: Option<String>,
+    /// JSON Schema subset (json inputs only): supports `required` and `properties[*].type`.
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+}
+
+impl InputSchema {
+    pub fn of_kind(kind: InputKind) -> Self {
+        Self { kind, min_length: None, max_length: None, pattern: None, schema: None }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -33,6 +51,17 @@ pub struct FileSpec {
     pub handler: Option<String>,
     #[serde(default)]
     pub input: Option<InputSchema>,
+    /// Path to a state file (relative to the tool directory).
+    /// The runtime holds an exclusive advisory lock on this file for the entire
+    /// duration of each handler invocation and passes its resolved path as the
+    /// `LIVEFOLDERS_STATE_FILE` environment variable.  Concurrent invocations
+    /// of the same endpoint are serialised automatically.
+    #[serde(default)]
+    pub state_file: Option<String>,
+    /// Ordered list of endpoint names to chain.  The stdout of each stage
+    /// becomes the stdin of the next.  When set, `handler` must be absent.
+    #[serde(default)]
+    pub pipe: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -75,12 +104,29 @@ impl Manifest {
         for spec in &self.files {
             match spec.kind {
                 FileKind::WriteInvoke | FileKind::ReadInvoke => {
-                    if spec.handler.is_none() {
-                        anyhow::bail!(
-                            "file '{}' has kind {:?} but no handler specified",
-                            spec.name,
-                            spec.kind
-                        );
+                    match (&spec.handler, &spec.pipe) {
+                        (None, None) => anyhow::bail!(
+                            "file '{}' has kind {:?} but neither handler nor pipe specified",
+                            spec.name, spec.kind
+                        ),
+                        (Some(_), Some(_)) => anyhow::bail!(
+                            "file '{}' specifies both handler and pipe; use one or the other",
+                            spec.name
+                        ),
+                        _ => {}
+                    }
+                    if let Some(stages) = &spec.pipe {
+                        if stages.is_empty() {
+                            anyhow::bail!("file '{}' pipe must contain at least one stage", spec.name);
+                        }
+                        for stage in stages {
+                            if self.spec_for(stage).is_none() {
+                                anyhow::bail!(
+                                    "file '{}' pipe references unknown endpoint '{}'",
+                                    spec.name, stage
+                                );
+                            }
+                        }
                     }
                 }
                 FileKind::Passthrough | FileKind::Readonly => {
@@ -287,5 +333,142 @@ files:
         let m: Manifest = serde_yaml::from_str(yaml).unwrap();
         let spec = m.spec_for("search").unwrap();
         assert!(spec.input.is_none());
+    }
+
+    #[test]
+    fn parse_string_constraints_from_yaml() {
+        let yaml = r#"
+files:
+  - name: greet
+    type: write_invoke
+    handler: cat
+    input:
+      type: string
+      min_length: 2
+      max_length: 50
+      pattern: "^[a-z]+$"
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("greet").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(matches!(schema.kind, InputKind::String));
+        assert_eq!(schema.min_length, Some(2));
+        assert_eq!(schema.max_length, Some(50));
+        assert_eq!(schema.pattern.as_deref(), Some("^[a-z]+$"));
+    }
+
+    #[test]
+    fn parse_json_schema_constraint_from_yaml() {
+        let yaml = r#"
+files:
+  - name: search
+    type: write_invoke
+    handler: cat
+    input:
+      type: json
+      schema:
+        required: [query]
+        properties:
+          query:
+            type: string
+          limit:
+            type: number
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("search").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(matches!(schema.kind, InputKind::Json));
+        let json_schema = schema.schema.as_ref().unwrap();
+        let required = json_schema["required"].as_array().unwrap();
+        assert_eq!(required[0].as_str(), Some("query"));
+        assert_eq!(json_schema["properties"]["limit"]["type"].as_str(), Some("number"));
+    }
+
+    #[test]
+    fn parse_pipe_field_from_yaml() {
+        let yaml = r#"
+files:
+  - name: fetch
+    type: write_invoke
+    handler: ./fetch.sh
+  - name: format
+    type: write_invoke
+    handler: ./format.sh
+  - name: weather_report
+    type: write_invoke
+    pipe: [fetch, format]
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("weather_report").unwrap();
+        assert!(spec.handler.is_none());
+        let stages = spec.pipe.as_ref().unwrap();
+        assert_eq!(stages, &["fetch", "format"]);
+    }
+
+    #[test]
+    fn validate_accepts_pipe_endpoint_without_handler() {
+        let yaml = r#"
+files:
+  - name: fetch
+    type: write_invoke
+    handler: ./fetch.sh
+  - name: pipeline
+    type: write_invoke
+    pipe: [fetch]
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        assert!(m.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_pipe_and_handler_together() {
+        let yaml = r#"
+files:
+  - name: a
+    type: write_invoke
+    handler: ./a.sh
+    pipe: [a]
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_pipe_referencing_unknown_stage() {
+        let yaml = r#"
+files:
+  - name: pipeline
+    type: write_invoke
+    pipe: [nonexistent]
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let err = m.validate().unwrap_err().to_string();
+        assert!(err.contains("nonexistent"), "got: {}", err);
+    }
+
+    #[test]
+    fn validate_rejects_empty_pipe() {
+        let yaml = "files:\n  - name: pipeline\n    type: write_invoke\n    pipe: []\n";
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn parse_input_schema_defaults_constraints_to_none() {
+        let yaml = r#"
+files:
+  - name: status
+    type: read_invoke
+    handler: date
+    input:
+      type: string
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("status").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(schema.min_length.is_none());
+        assert!(schema.max_length.is_none());
+        assert!(schema.pattern.is_none());
+        assert!(schema.schema.is_none());
     }
 }
