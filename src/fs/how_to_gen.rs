@@ -88,8 +88,8 @@ mod tests {
     #[test]
     fn generate_lists_file_specs() {
         let m = make_manifest("demo", None, vec![
-            FileSpec { name: "forecast".into(), kind: FileKind::ReadInvoke, handler: Some("date".into()) },
-            FileSpec { name: "notes.txt".into(), kind: FileKind::Passthrough, handler: None },
+            FileSpec { name: "forecast".into(), kind: FileKind::ReadInvoke, handler: Some("date".into()), input: None },
+            FileSpec { name: "notes.txt".into(), kind: FileKind::Passthrough, handler: None, input: None },
         ], vec![]);
         let out = generate_how_to(&m);
         assert!(out.contains("forecast"));
