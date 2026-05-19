@@ -14,7 +14,7 @@ use tracing::debug;
 
 use crate::manifest::FileKind;
 use crate::registry::{Session, ToolRegistry};
-use crate::tools::{invoke_command, invoke_command_validated};
+use crate::tools::invoke_command_validated;
 
 use super::inode::*;
 use super::root_doc::ROOT_HOW_TO;
