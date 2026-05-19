@@ -1,0 +1,11 @@
+name: pipeline
+description: Shouts input then counts words.
+
+files:
+  - name: shout_and_count
+    type: write_invoke
+    handler: |
+      input=$(cat -)
+      shouted=$(echo "$input" | tr '[:lower:]' '[:upper:]')
+      words=$(echo "$shouted" | wc -w)
+      echo "Text: $shouted | Words: $words"
