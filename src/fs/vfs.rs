@@ -28,6 +28,10 @@ type WriteBuf = Arc<Mutex<HashMap<u64, Vec<u8>>>>;
 /// Last result keyed by inode — returned on the next read after invocation.
 type ResultBuf = Arc<Mutex<HashMap<u64, Vec<u8>>>>;
 
+/// Per-invocation trace keyed by endpoint inode.
+/// Content: structured text with duration_ms, exit status, and stderr.
+type TraceBuf = Arc<Mutex<HashMap<u64, Vec<u8>>>>;
+
 /// Inode → disk path mapping for external tool files (inodes >= 100_000).
 type InodeTable = Arc<Mutex<HashMap<u64, PathBuf>>>;
 
@@ -40,6 +44,7 @@ pub struct LiveFolders {
     session: Session,
     write_buf: WriteBuf,
     result_buf: ResultBuf,
+    trace_buf: TraceBuf,
     rt: Handle,
     inode_table: InodeTable,
     path_table: PathTable,
@@ -61,6 +66,7 @@ impl LiveFolders {
             session,
             write_buf: Arc::new(Mutex::new(HashMap::new())),
             result_buf: Arc::new(Mutex::new(HashMap::new())),
+            trace_buf: Arc::new(Mutex::new(HashMap::new())),
             rt,
             inode_table: Arc::new(Mutex::new(HashMap::new())),
             path_table: Arc::new(Mutex::new(HashMap::new())),
@@ -321,6 +327,28 @@ impl LiveFolders {
         let tools_dir = self.tools_dir.as_ref()?;
         let disk_path = tools_dir.join(tool_name).join(name);
 
+        // .log file: synthesize attr from trace_buf (keyed by the corresponding endpoint ino).
+        if let Some(ep_name) = name.strip_suffix(".log") {
+            if let Some(manifest) = self.manifest_for_tool(tool_name)
+                && let Some(spec) = manifest.spec_for(ep_name)
+                && matches!(spec.kind, FileKind::WriteInvoke | FileKind::ReadInvoke) {
+                    let ep_path = tools_dir.join(tool_name).join(ep_name);
+                    let ep_ino = self.ino_for_path(&ep_path);
+                    let size = self.trace_buf.lock().unwrap()
+                        .get(&ep_ino).map(|t| t.len()).unwrap_or(0) as u64;
+                    let log_ino = self.ino_for_path(&disk_path);
+                    return Some(Self::file_attr(log_ino, size, 0o444));
+                }
+        }
+
+        // schema.json: synthesize from folder.yaml.
+        if name == "schema.json"
+            && let Ok(Some(manifest)) = crate::manifest::Manifest::load(&tools_dir.join(tool_name)) {
+                let content = crate::fs::schema_gen::generate_schema_json(&manifest);
+                let ino = self.ino_for_path(&disk_path);
+                return Some(Self::file_attr(ino, content.len() as u64, 0o444));
+            }
+
         // For virtual files (write_invoke / read_invoke) declared in the manifest,
         // synthesize an attr without requiring a disk file.
         if let Some(manifest) = self.manifest_for_tool(tool_name)
@@ -332,13 +360,11 @@ impl LiveFolders {
                             .get(&ino).map(|r| r.len()).unwrap_or(0) as u64;
                         return Some(Self::file_attr(ino, result_size, 0o644));
                     }
-                    FileKind::Passthrough | FileKind::Readonly => {
-                        // Fall through to disk stat.
-                    }
+                    FileKind::Passthrough | FileKind::Readonly => {}
                 }
             }
 
-        // Fallback: if how_to.md is absent on disk but folder.yaml exists, synthesize attr.
+        // how_to.md: synthesize if absent on disk.
         if name == "how_to.md" && !disk_path.exists()
             && let Ok(Some(manifest)) = crate::manifest::Manifest::load(&tools_dir.join(tool_name)) {
                 let content = crate::fs::how_to_gen::generate_how_to(&manifest);
@@ -355,6 +381,21 @@ impl LiveFolders {
         } else {
             Some(Self::file_attr(ino, meta.len(), perm))
         }
+    }
+
+    /// Formats an invocation trace for the `.log` virtual file.
+    fn format_trace(duration_ms: u64, is_error: bool, stderr: &[u8]) -> Vec<u8> {
+        let exit_str = if is_error { "error" } else { "ok" };
+        let stderr_str = String::from_utf8_lossy(stderr);
+        let stderr_str = stderr_str.trim();
+        format!("duration_ms: {}\nexit: {}\nstderr: {}\n", duration_ms, exit_str, stderr_str)
+            .into_bytes()
+    }
+
+    /// Stores a trace entry keyed by endpoint inode.
+    fn store_trace(&self, ep_ino: u64, duration_ms: u64, is_error: bool, stderr: &[u8]) {
+        let trace = Self::format_trace(duration_ms, is_error, stderr);
+        self.trace_buf.lock().unwrap().insert(ep_ino, trace);
     }
 }
 
@@ -510,9 +551,12 @@ impl Filesystem for LiveFolders {
                                 });
                             let timeout = self.timeout_secs;
                             let input_schema = spec.input.clone();
+                            let state_file = spec.state_file.clone()
+                                .map(|sf| cwd.join(sf));
                             let result = self.rt.block_on(async move {
-                                invoke_command_validated(&handler, &input, &tool_name, &file_name, &cwd, timeout, input_schema.as_ref()).await
+                                invoke_command_validated(&handler, &input, &tool_name, &file_name, &cwd, timeout, input_schema.as_ref(), state_file.as_deref()).await
                             });
+                            self.store_trace(ino, result.duration_ms, result.is_error(), &result.stderr);
                             let b = if result.is_error() {
                                 format!("{}\n", result.error.unwrap()).into_bytes()
                             } else {
@@ -546,7 +590,30 @@ impl Filesystem for LiveFolders {
             }
 
             // No manifest entry or passthrough/readonly: read from disk.
-            // If the file doesn't exist but is named how_to.md, generate from folder.yaml.
+
+            // .log virtual file: return trace for the corresponding endpoint.
+            if let Some(path_str) = disk_path.to_str()
+                && let Some(ep_str) = path_str.strip_suffix(".log") {
+                    let ep_path = PathBuf::from(ep_str);
+                    let trace = self.path_table.lock().unwrap()
+                        .get(&ep_path).copied()
+                        .and_then(|ep_ino| self.trace_buf.lock().unwrap().get(&ep_ino).cloned())
+                        .unwrap_or_default();
+                    reply_bytes(reply, &trace, offset, size);
+                    return;
+                }
+
+            // schema.json: generate from folder.yaml.
+            if disk_path.file_name().is_some_and(|n| n == "schema.json")
+                && let Some(tool_dir) = disk_path.parent()
+                    && let Ok(Some(manifest)) = crate::manifest::Manifest::load(tool_dir) {
+                        let content = crate::fs::schema_gen::generate_schema_json(&manifest);
+                        let data = content.into_bytes();
+                        reply_bytes(reply, &data, offset, size);
+                        return;
+                    }
+
+            // how_to.md: generate from folder.yaml if absent on disk.
             if !disk_path.exists()
                 && disk_path.file_name().is_some_and(|n| n == "how_to.md")
                 && let Some(tool_dir) = disk_path.parent()
@@ -655,9 +722,12 @@ impl Filesystem for LiveFolders {
                             let handler = spec.handler.clone().unwrap_or_default();
                             let timeout = self.timeout_secs;
                             let input_schema = spec.input.clone();
+                            let state_file = spec.state_file.clone()
+                                .map(|sf| cwd.join(sf));
                             let output = self.rt.block_on(async move {
-                                invoke_command_validated(&handler, &input, &tool_name, &file_name, &cwd, timeout, input_schema.as_ref()).await
+                                invoke_command_validated(&handler, &input, &tool_name, &file_name, &cwd, timeout, input_schema.as_ref(), state_file.as_deref()).await
                             });
+                            self.store_trace(ino, output.duration_ms, output.is_error(), &output.stderr);
                             let bytes = if output.is_error() {
                                 format!("{}\n", output.error.unwrap()).into_bytes()
                             } else {
@@ -917,23 +987,31 @@ impl Filesystem for LiveFolders {
                                         entries.push((child_ino, kind, fname));
                                     }
                                 }
-                                // Synthesize how_to.md if the tool has a folder.yaml but no how_to.md on disk.
-                                let has_how_to = entries.iter().any(|(_, _, n)| n == "how_to.md");
-                                if !has_how_to
-                                    && let Ok(Some(_)) = crate::manifest::Manifest::load(&tool_path) {
-                                        let how_to_path = tool_path.join("how_to.md");
-                                        let child_ino = self.ino_for_path(&how_to_path);
-                                        entries.push((child_ino, FileType::RegularFile, "how_to.md".to_string()));
+                                if let Ok(Some(manifest)) = crate::manifest::Manifest::load(&tool_path) {
+                                    // Synthesize how_to.md if absent on disk.
+                                    if !entries.iter().any(|(_, _, n)| n == "how_to.md") {
+                                        let p = tool_path.join("how_to.md");
+                                        entries.push((self.ino_for_path(&p), FileType::RegularFile, "how_to.md".to_string()));
                                     }
-                                // Merge manifest-declared virtual files (may not exist on disk).
-                                if let Some(manifest) = self.manifest_for_tool(&tool_name) {
+                                    // Always include schema.json.
+                                    if !entries.iter().any(|(_, _, n)| n == "schema.json") {
+                                        let p = tool_path.join("schema.json");
+                                        entries.push((self.ino_for_path(&p), FileType::RegularFile, "schema.json".to_string()));
+                                    }
+                                    // Merge manifest-declared virtual files and their .log companions.
                                     for spec in &manifest.files {
-                                        if entries.iter().any(|(_, _, n)| n == &spec.name) {
-                                            continue;
+                                        use crate::manifest::FileKind;
+                                        if !entries.iter().any(|(_, _, n)| n == &spec.name) {
+                                            let vp = tool_path.join(&spec.name);
+                                            entries.push((self.ino_for_path(&vp), FileType::RegularFile, spec.name.clone()));
                                         }
-                                        let virtual_path = tool_path.join(&spec.name);
-                                        let child_ino = self.ino_for_path(&virtual_path);
-                                        entries.push((child_ino, FileType::RegularFile, spec.name.clone()));
+                                        if matches!(spec.kind, FileKind::WriteInvoke | FileKind::ReadInvoke) {
+                                            let log_name = format!("{}.log", spec.name);
+                                            if !entries.iter().any(|(_, _, n)| *n == log_name) {
+                                                let lp = tool_path.join(&log_name);
+                                                entries.push((self.ino_for_path(&lp), FileType::RegularFile, log_name));
+                                            }
+                                        }
                                     }
                                 }
                                 // Skip built-in endpoint enumeration for external tools
@@ -991,5 +1069,40 @@ impl Filesystem for LiveFolders {
             }
         }
         reply.ok();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LiveFolders;
+
+    #[test]
+    fn format_trace_success_includes_duration_and_ok() {
+        let out = LiveFolders::format_trace(123, false, b"");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("duration_ms: 123"), "got: {s}");
+        assert!(s.contains("exit: ok"), "got: {s}");
+    }
+
+    #[test]
+    fn format_trace_error_sets_exit_to_error() {
+        let out = LiveFolders::format_trace(0, true, b"");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("exit: error"), "got: {s}");
+    }
+
+    #[test]
+    fn format_trace_includes_trimmed_stderr() {
+        let out = LiveFolders::format_trace(50, false, b"  warning: something\n");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("warning: something"), "got: {s}");
+        assert!(!s.ends_with("  "), "leading spaces should be trimmed");
+    }
+
+    #[test]
+    fn format_trace_empty_stderr_produces_empty_line() {
+        let out = LiveFolders::format_trace(10, false, b"");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("stderr: \n"), "got: {s}");
     }
 }

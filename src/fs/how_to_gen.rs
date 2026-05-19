@@ -27,6 +27,28 @@ pub fn generate_how_to(manifest: &Manifest) -> String {
                     InputKind::None => "no payload",
                 };
                 out.push_str(&format!(", input: {}", type_str));
+                if let Some(min) = schema.min_length {
+                    out.push_str(&format!(", min_length: {}", min));
+                }
+                if let Some(max) = schema.max_length {
+                    out.push_str(&format!(", max_length: {}", max));
+                }
+                if let Some(ref pat) = schema.pattern {
+                    out.push_str(&format!(", pattern: `{}`", pat));
+                }
+                if let Some(ref json_schema) = schema.schema {
+                    out.push_str(&format!(", schema: `{}`", json_schema));
+                }
+            }
+            if let Some(ref sf) = spec.state_file {
+                out.push_str(&format!(", state_file: `{}`", sf));
+            }
+            if let Some(ref stages) = spec.pipe {
+                out.push_str(&format!(", pipe: [{}]", stages.join(", ")));
+            }
+            // Invokable endpoints expose a companion .log file after first call.
+            if matches!(spec.kind, FileKind::WriteInvoke | FileKind::ReadInvoke) {
+                out.push_str(&format!(" → read `{}.log` for last invocation timing and stderr", spec.name));
             }
             out.push('\n');
         }
@@ -47,8 +69,10 @@ pub fn generate_how_to(manifest: &Manifest) -> String {
             out.push('\n');
         }
     }
+    out.push_str("\nRead `schema.json` for a machine-readable version of the endpoint schemas.\n");
     out
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -96,8 +120,8 @@ mod tests {
     #[test]
     fn generate_lists_file_specs() {
         let m = make_manifest("demo", None, vec![
-            FileSpec { name: "forecast".into(), kind: FileKind::ReadInvoke, handler: Some("date".into()), input: None },
-            FileSpec { name: "notes.txt".into(), kind: FileKind::Passthrough, handler: None, input: None },
+            FileSpec { name: "forecast".into(), kind: FileKind::ReadInvoke, handler: Some("date".into()), input: None, state_file: None, pipe: None },
+            FileSpec { name: "notes.txt".into(), kind: FileKind::Passthrough, handler: None, input: None, state_file: None, pipe: None },
         ], vec![]);
         let out = generate_how_to(&m);
         assert!(out.contains("forecast"));
@@ -118,10 +142,69 @@ mod tests {
                 name: "query".to_string(),
                 kind: FileKind::WriteInvoke,
                 handler: Some("./search.sh".to_string()),
-                input: Some(InputSchema { kind: InputKind::Json }),
+                input: Some(InputSchema::of_kind(InputKind::Json)),
+                state_file: None,
+                pipe: None,
             }],
         };
         let output = generate_how_to(&manifest);
         assert!(output.contains("JSON"), "expected JSON mention, got:\n{}", output);
+    }
+
+    #[test]
+    fn how_to_surfaces_string_constraints() {
+        use crate::manifest::{FileKind, FileSpec, InputKind, InputSchema, Manifest};
+        let manifest = Manifest {
+            name: Some("greet".to_string()),
+            description: None,
+            version: None,
+            env: vec![],
+            files: vec![FileSpec {
+                name: "say".to_string(),
+                kind: FileKind::WriteInvoke,
+                handler: Some("cat".to_string()),
+                input: Some(InputSchema {
+                    kind: InputKind::String,
+                    min_length: Some(1),
+                    max_length: Some(80),
+                    pattern: Some(r"^[a-z]+$".to_string()),
+                    schema: None,
+                }),
+                state_file: None,
+                pipe: None,
+            }],
+        };
+        let output = generate_how_to(&manifest);
+        assert!(output.contains("min_length: 1"), "got:\n{}", output);
+        assert!(output.contains("max_length: 80"), "got:\n{}", output);
+        assert!(output.contains("^[a-z]+$"), "got:\n{}", output);
+    }
+
+    #[test]
+    fn how_to_surfaces_json_schema() {
+        use crate::manifest::{FileKind, FileSpec, InputKind, InputSchema, Manifest};
+        let manifest = Manifest {
+            name: Some("search".to_string()),
+            description: None,
+            version: None,
+            env: vec![],
+            files: vec![FileSpec {
+                name: "query".to_string(),
+                kind: FileKind::WriteInvoke,
+                handler: Some("cat".to_string()),
+                input: Some(InputSchema {
+                    kind: InputKind::Json,
+                    min_length: None,
+                    max_length: None,
+                    pattern: None,
+                    schema: Some(serde_json::json!({"required": ["q"]})),
+                }),
+                state_file: None,
+                pipe: None,
+            }],
+        };
+        let output = generate_how_to(&manifest);
+        assert!(output.contains("schema:"), "got:\n{}", output);
+        assert!(output.contains("required"), "got:\n{}", output);
     }
 }

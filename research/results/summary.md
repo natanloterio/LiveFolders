@@ -15,13 +15,14 @@
 === criteria/03-discoverability/ ===
 [03-discoverability]
 
---- LiveFoldersFS: LLM reads index.md (plain text) ---
-# Tools
+--- LiveFoldersFS: auto-generated how_to.md (includes input type + constraints) ---
+# shout
 
-## shout
 Echoes input in uppercase.
 
-Files: shout
+## Files
+
+- **shout** (`write_invoke`) — handler: `tr '[:lower:]' '[:upper:]'`, input: plain text, min_length: 1, max_length: 500
 
 --- MCP: LLM receives list_tools JSON response ---
 {
@@ -40,26 +41,52 @@ Files: shout
   ]
 }
 
-  LiveFoldersFS: human-readable markdown, LLM reads it naturally
-  MCP: structured JSON schema, enables parameter validation
-  Winner: Tie — MCP wins on schema strictness; LiveFoldersFS wins on readability
+  LiveFoldersFS: human-readable markdown, LLM reads it naturally;
+    input type, min/max length, pattern, and JSON schema now surfaced inline.
+  MCP: structured JSON schema, protocol-enforced parameter validation.
+  Winner: MCP retains schema-strictness edge; LiveFoldersFS now surfaces types + constraints.
 
 === criteria/04-io-expressiveness/ ===
 [04-io-expressiveness]
 
 Plain text:  both handle it
-JSON:        LiveFoldersFS passes raw string (handler must parse); MCP enforces typed schema
+JSON:        LiveFoldersFS now enforces structural schema (required fields, property types)
+             before handler runs; MCP enforces typed schema at protocol layer.
 Multiline:   LiveFoldersFS native (stdin); MCP requires escaped string parameter
 Binary:      LiveFoldersFS: pipe binary to handler; MCP: base64 encode in string (workaround)
+Constraints: LiveFoldersFS: min/max length, regex pattern for strings; MCP: type/required only
 
-  Winner: MCP for structured/typed I/O; LiveFoldersFS for raw/binary/streaming
+  Example: json_reflect with schema {required:[text], properties:{text:{type:string}}}
+    Valid input   {"text":"hello"} → passes, handler runs
+    Missing field {}               → [ERROR:INVALID_INPUT] missing required field: 'text'
+    Wrong type    {"text":42}      → [ERROR:INVALID_INPUT] field 'text' expected type 'string'
+
+  Winner: MCP for protocol-enforced schema; LiveFoldersFS now competitive with
+    opt-in structural validation (required fields, property types, string constraints).
 
 === criteria/05-security/ ===
 [05-security]
   Both: run as user process, no OS sandboxing
-  LiveFoldersFS: shell handler = injection risk if input not sanitized in handler
-  MCP: schema validation provides input sanitization layer
-  Winner: MCP (marginal) — schema reduces injection surface
+
+  LiveFoldersFS (v0.7.0):
+    - Opt-in per-endpoint structural validation via folder.yaml input.schema
+    - Supports: required fields, property type checks, string min/max/pattern
+    - Malformed input rejected before handler runs → no shell code executed
+    - Remaining gap: opt-in (author must declare schema), not protocol-enforced
+    - Shell injection within handler body is still the author's responsibility
+
+  MCP:
+    - Schema validation enforced unconditionally at protocol layer
+    - Every tool rejects mistyped inputs automatically
+    - No equivalent of string pattern or length constraints without custom validation
+
+  Example (LiveFoldersFS search endpoint, schema: required=[query], query:string):
+    Valid:   echo '{"query":"cats"}' → handler runs, returns result
+    Missing: echo '{}'               → [ERROR:INVALID_INPUT] missing required field: 'query'
+    Wrong:   echo '{"query":42}'     → [ERROR:INVALID_INPUT] field 'query' expected type 'string'
+
+  Winner: MCP for unconditional protocol-layer enforcement;
+    LiveFoldersFS ~ (partial, improved) — structural validation now available opt-in.
 
 === criteria/06-stateful-tools/ ===
 [06-stateful-tools]
@@ -116,4 +143,14 @@ MCP:
   Option C: share repo URL, users clone and configure themselves
 
   Winner: LiveFoldersFS — one-command install from any GitHub URL
+
+=== criteria/worked-example/ ===
+[worked-example (users REST API)]
+  LiveFoldersFS: 10 lines (folder.yaml)
+  MCP (Python):  18 lines (server.py)
+
+  LiveFoldersFS install: livefolders install github.com/natanloterio/LiveFolders/tree/master/examples/users
+  MCP install: pip install mcp httpx && configure server in claude_desktop_config.json
+
+  Winner: LiveFoldersFS — zero-dependency install vs multi-step MCP setup
 

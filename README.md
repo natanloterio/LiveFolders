@@ -52,7 +52,10 @@ livefolders install github.com/natanloterio/LiveFolders/tree/master/examples/use
 livefolders mount
 
 # 4. Use it
+## 4.1 Make a request from API
 cat .livefolders/tools/users/list      # fetches users from the API
+
+## 4.2 Call a simple local program
 echo "hello world" > .livefolders/tools/demo/shout
 cat .livefolders/tools/demo/shout      # → HELLO WORLD
 
@@ -74,10 +77,13 @@ Every tool is a directory under `/tools/<name>/`. Each file inside is an **endpo
 ├── index.md            ← all tools and descriptions
 ├── demo/
 │   ├── how_to.md       ← LLM reads this to understand the tool
+│   ├── schema.json     ← machine-readable endpoint schemas (auto-generated)
 │   ├── shout           ← write text, read it back uppercased
+│   ├── shout.log       ← last invocation: duration_ms + stderr
 │   └── status          ← read to get current status
 └── users/
     ├── how_to.md
+    ├── schema.json
     └── list            ← read to fetch users from the API
 ```
 
@@ -135,9 +141,10 @@ Any directory with a `folder.yaml` is a LiveFolders tool. No Rust required.
 ~/.config/livefolders/tools/
 └── weather/
     ├── folder.yaml
-    ├── how_to.md
-    └── forecast        ← optional script (if not using handler in yaml)
+    └── forecast        ← optional script (if not using inline handler)
 ```
+
+> `how_to.md` and `schema.json` are auto-generated from `folder.yaml` — no need to include them.
 
 **`folder.yaml`**
 
@@ -151,8 +158,6 @@ files:
     handler: "curl -s \"https://wttr.in/$(cat -)?format=3\""
 ```
 
-> `how_to.md` is auto-generated from `folder.yaml` if not present on disk — no need to include it.
-
 **File types**
 
 | Type | Write | Read |
@@ -162,9 +167,11 @@ files:
 | `passthrough` | Writes to disk | Reads from disk |
 | `readonly` | Returns error | Reads from disk |
 
+---
+
 **Input validation**
 
-Add an `input:` field to any endpoint to validate what the LLM writes before the handler runs:
+Add an `input:` field to validate what the LLM writes before the handler runs:
 
 ```yaml
 files:
@@ -173,16 +180,103 @@ files:
     handler: "./search.sh"
     input:
       type: json       # "json" | "string" | "none"
+      schema:
+        required: [query]
+        properties:
+          query: { type: string }
+          limit: { type: number }
 ```
 
 | Value | Behaviour |
 |---|---|
 | `json` | Rejects input that is not valid UTF-8 JSON |
-| `string` | Accepts any bytes (explicit no-op, same as omitting the field) |
+| `string` | Accepts any bytes; supports `min_length`, `max_length`, `pattern` |
 | `none` | Rejects any non-empty input |
-| *(absent)* | No validation — current behaviour preserved |
+| *(absent)* | No validation |
 
-On rejection the endpoint returns `[ERROR:INVALID_INPUT] reason` instead of invoking the handler. The generated `how_to.md` documents the declared input type automatically.
+String constraints:
+
+```yaml
+input:
+  type: string
+  min_length: 1
+  max_length: 500
+  pattern: "^\\w+$"
+```
+
+JSON schema subset (`required`, `properties[*].type`) is enforced before the handler runs. Supported property types: `string`, `number`, `integer`, `boolean`, `array`, `object`, `null`.
+
+On rejection the endpoint returns `[ERROR:INVALID_INPUT] reason` without invoking the handler. All declared constraints appear in the auto-generated `how_to.md` and `schema.json`.
+
+---
+
+**Stateful tools**
+
+Declare a `state_file` to persist data across invocations. The runtime holds an exclusive advisory lock (`flock LOCK_EX`) for the entire duration of each handler call, serialising concurrent invocations automatically:
+
+```yaml
+files:
+  - name: counter
+    type: write_invoke
+    handler: "./counter.sh"
+    state_file: counter.db
+```
+
+The resolved path is passed to the handler as `LIVEFOLDERS_STATE_FILE`. The file is created if it does not exist.
+
+---
+
+**Pipelines**
+
+Chain endpoints with `pipe:`. A single write invocation runs the stages in order, passing each stage's stdout as the next stage's stdin:
+
+```yaml
+files:
+  - name: fetch_data
+    type: write_invoke
+    handler: "./fetch.sh"
+  - name: format_report
+    type: write_invoke
+    handler: "./format.sh"
+  - name: report          # ← pipe endpoint, no handler needed
+    type: write_invoke
+    pipe: [fetch_data, format_report]
+```
+
+```bash
+echo "London" > .livefolders/tools/weather/report
+cat .livefolders/tools/weather/report   # → formatted output from both stages
+```
+
+Per-stage `input:` schemas are validated before each stage executes. Any stage error stops the pipeline and returns a structured `[ERROR:CODE]` response immediately.
+
+---
+
+**Observability**
+
+After every invocation, a companion `<endpoint>.log` file is written alongside the endpoint:
+
+```bash
+cat .livefolders/tools/weather/forecast.log
+# duration_ms: 342
+# --- stderr ---
+# (empty)
+```
+
+This lets the LLM or a monitoring script check execution timing and stderr without a separate round-trip.
+
+The `schema.json` file in each tool directory mirrors MCP's `list_tools` format, making the tool surface parseable by MCP-aware clients and scripts:
+
+```bash
+cat .livefolders/tools/weather/schema.json
+# {
+#   "name": "weather",
+#   "description": "Get the weather forecast for any city.",
+#   "endpoints": [{ "name": "forecast", "kind": "write_invoke" }]
+# }
+```
+
+---
 
 **Error format**
 
@@ -195,6 +289,8 @@ All handler errors are returned as `[ERROR:CODE] message` so LLMs and scripts ca
 | `TIMEOUT` | Handler exceeded the configured timeout |
 | `SPAWN` | Handler process failed to start |
 | `PROCESS` | Unexpected process I/O error |
+
+---
 
 **Handlers**
 
@@ -213,6 +309,7 @@ Every handler receives:
 - `stdin` — bytes the LLM wrote to the endpoint
 - `LIVEFOLDERS_TOOL` — tool name
 - `LIVEFOLDERS_ENDPOINT` — endpoint filename
+- `LIVEFOLDERS_STATE_FILE` — resolved state file path (only when `state_file` is declared)
 - All env vars present at mount time (including secrets)
 
 **Hot-reload**

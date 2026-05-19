@@ -5,15 +5,19 @@ use super::Session;
 pub struct ToolResult {
     pub output: Vec<u8>,
     pub error: Option<String>,
+    /// Wall-clock time of the handler invocation in milliseconds.
+    pub duration_ms: u64,
+    /// Raw bytes written by the handler to stderr (empty on success or if not captured).
+    pub stderr: Vec<u8>,
 }
 
 impl ToolResult {
     pub fn ok(output: impl Into<Vec<u8>>) -> Self {
-        Self { output: output.into(), error: None }
+        Self { output: output.into(), error: None, duration_ms: 0, stderr: Vec::new() }
     }
 
     pub fn err(msg: impl Into<String>) -> Self {
-        Self { output: Vec::new(), error: Some(msg.into()) }
+        Self { output: Vec::new(), error: Some(msg.into()), duration_ms: 0, stderr: Vec::new() }
     }
 
     pub fn is_error(&self) -> bool {

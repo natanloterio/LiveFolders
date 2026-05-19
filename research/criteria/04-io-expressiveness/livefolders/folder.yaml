@@ -5,6 +5,16 @@ files:
   - name: reflect
     type: write_invoke
     handler: "cat -"
+    input:
+      type: string
+      min_length: 1
   - name: json_reflect
     type: write_invoke
     handler: "python3 -c \"import sys,json; d=json.load(sys.stdin); print(json.dumps(d))\""
+    input:
+      type: json
+      schema:
+        required: [text]
+        properties:
+          text:
+            type: string
