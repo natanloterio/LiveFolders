@@ -1,5 +1,6 @@
 mod config;
 mod daemon;
+mod error;
 mod doctor;
 mod fs;
 mod installer;
