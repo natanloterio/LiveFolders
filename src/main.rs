@@ -77,11 +77,11 @@ fn main() -> Result<()> {
 }
 
 fn cmd_init() -> Result<()> {
-    cmd_init_silent()
+    cmd_init_silent(&std::env::current_dir()?)
 }
 
-fn cmd_init_silent() -> Result<()> {
-    let path = PathBuf::from("livefolders.yaml");
+fn cmd_init_silent(base: &std::path::Path) -> Result<()> {
+    let path = base.join("livefolders.yaml");
     if path.exists() {
         bail!("livefolders.yaml already exists in the current directory");
     }
@@ -238,12 +238,9 @@ mod tests {
     #[test]
     fn init_creates_livefolders_yaml_with_defaults() {
         let tmp = tempfile::tempdir().unwrap();
-        let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(tmp.path()).unwrap();
-        super::cmd_init_silent().unwrap();
+        super::cmd_init_silent(tmp.path()).unwrap();
         let content = std::fs::read_to_string(tmp.path().join("livefolders.yaml")).unwrap();
         assert!(content.contains("mount: .livefolders"));
         assert!(content.contains("tools_dir:"));
-        std::env::set_current_dir(prev).unwrap();
     }
 }
