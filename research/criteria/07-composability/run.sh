@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+CRITERION="07-composability"
+echo "[$CRITERION]"
+echo ""
+echo "LiveFoldersFS: compose via shell pipes — any unix tool is composable"
+echo "  Cross-tool calls require writing to another endpoint file (awkward for chaining)"
+echo ""
+echo "MCP: compose via Python function calls — clean, typed, testable"
+echo "  Cross-server tool calls not natively supported; requires LLM orchestration"
+echo ""
+echo "  Winner: MCP for within-server composition; LiveFoldersFS for unix pipeline composition"
