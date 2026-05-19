@@ -11,12 +11,28 @@ pub enum FileKind {
     Readonly,
 }
 
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum InputKind {
+    String,
+    Json,
+    None,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct InputSchema {
+    #[serde(rename = "type")]
+    pub kind: InputKind,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct FileSpec {
     pub name: String,
     #[serde(rename = "type")]
     pub kind: FileKind,
     pub handler: Option<String>,
+    #[serde(default)]
+    pub input: Option<InputSchema>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -214,5 +230,61 @@ env:
     fn spec_for_returns_none_on_empty_files() {
         let m: Manifest = serde_yaml::from_str("name: empty\n").unwrap();
         assert!(m.spec_for("anything").is_none());
+    }
+
+    #[test]
+    fn parse_file_spec_with_json_input_schema() {
+        let yaml = r#"
+files:
+  - name: search
+    type: write_invoke
+    handler: ./search.sh
+    input:
+      type: json
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("search").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(matches!(schema.kind, InputKind::Json));
+    }
+
+    #[test]
+    fn parse_file_spec_with_none_input_schema() {
+        let yaml = r#"
+files:
+  - name: status
+    type: read_invoke
+    handler: ./status.sh
+    input:
+      type: none
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("status").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(matches!(schema.kind, InputKind::None));
+    }
+
+    #[test]
+    fn parse_file_spec_with_string_input_schema() {
+        let yaml = r#"
+files:
+  - name: echo
+    type: write_invoke
+    handler: cat
+    input:
+      type: string
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("echo").unwrap();
+        let schema = spec.input.as_ref().unwrap();
+        assert!(matches!(schema.kind, InputKind::String));
+    }
+
+    #[test]
+    fn parse_file_spec_without_input_schema_is_none() {
+        let yaml = "files:\n  - name: search\n    type: write_invoke\n    handler: ./search.sh\n";
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let spec = m.spec_for("search").unwrap();
+        assert!(spec.input.is_none());
     }
 }
