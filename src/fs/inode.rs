@@ -8,7 +8,6 @@
 ///   /tools/<tool>/<ep>      → invocable endpoint file
 ///
 /// Inode allocation is deterministic from path so we never need a table.
-
 pub const ROOT_INO: u64 = 1;
 pub const TOOLS_DIR_INO: u64 = 2;
 pub const ROOT_INDEX_INO: u64 = 3;
@@ -17,7 +16,6 @@ pub const ROOT_HOW_TO_INO: u64 = 4;
 /// Inodes 1000+ are tool dirs (1000 + tool_index * 100).
 /// Inodes 1001+ are how_to files (tool_ino + 1).
 /// Inodes 1010+ are endpoint files (tool_ino + 10 + ep_index).
-
 pub fn tool_dir_ino(tool_index: usize) -> u64 {
     1000 + (tool_index as u64) * 100
 }

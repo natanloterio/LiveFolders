@@ -45,10 +45,10 @@ impl Config {
             None => Ok(None),
             Some(p) => {
                 let s = p.to_string_lossy();
-                if s.starts_with("~/") {
+                if let Some(stripped) = s.strip_prefix("~/") {
                     let home = std::env::var("HOME")
                         .context("tools_dir starts with '~/' but $HOME is not set")?;
-                    Ok(Some(PathBuf::from(home).join(&s[2..])))
+                    Ok(Some(PathBuf::from(home).join(stripped)))
                 } else {
                     Ok(Some(p.clone()))
                 }
