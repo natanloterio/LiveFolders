@@ -24,7 +24,7 @@ pub fn generate_how_to(manifest: &Manifest) -> String {
                 let type_str = match schema.kind {
                     InputKind::String => "plain text",
                     InputKind::Json => "JSON",
-                    InputKind::None => "nothing (read-only endpoint)",
+                    InputKind::None => "no payload",
                 };
                 out.push_str(&format!(", input: {}", type_str));
             }
