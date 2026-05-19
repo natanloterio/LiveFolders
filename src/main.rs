@@ -1,4 +1,5 @@
 mod config;
+mod doctor;
 mod fs;
 mod installer;
 mod manifest;
@@ -27,6 +28,7 @@ Commands:
   init                   Create a starter livefolders.yaml in the current directory
   mount [path]           Mount the filesystem (path overrides livefolders.yaml)
   install <url>          Install a tool from GitHub
+  doctor                 Check setup and print actionable fixes
   help                   Show this help
 
 Options:
@@ -62,6 +64,22 @@ fn main() -> Result<()> {
             }
             let cfg = load_config_for_install(&args);
             installer::install(url, &cfg)
+        }
+        "doctor" => {
+            let config_path = parse_mount_args(&args).1;
+            let cfg = match config_path {
+                Some(p) => Config::load(&p).unwrap_or_else(|_| Config::default_config()),
+                None => {
+                    let default = PathBuf::from("livefolders.yaml");
+                    if default.exists() {
+                        Config::load(&default).unwrap_or_else(|_| Config::default_config())
+                    } else {
+                        Config::default_config()
+                    }
+                }
+            };
+            doctor::run_doctor(&cfg);
+            Ok(())
         }
         "help" | "--help" | "-h" => {
             print!("{}", USAGE);
