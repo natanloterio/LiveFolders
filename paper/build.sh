@@ -18,10 +18,10 @@ pandoc main.md \
   --bibliography=references.bib \
   --citeproc \
   --standalone \
-  --variable=geometry:margin=1in \
+  --variable=geometry:"top=1in,bottom=1in,left=1.25in,right=1.25in" \
   --variable=fontsize:11pt \
-  --variable=linestretch:1.2 \
-  --variable=mainfont:"DejaVu Serif" \
+  --variable=linestretch:1.15 \
+  --variable=mainfont:"TeX Gyre Termes" \
   --variable=monofont:"DejaVu Sans Mono" \
   -H header.tex \
   -o output.tex
