@@ -20,6 +20,8 @@ struct SandboxGlobalConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub name: Option<String>,
+
     pub mount: Option<PathBuf>,
 
     pub tools_dir: Option<PathBuf>,
@@ -51,6 +53,7 @@ impl Config {
 
     pub fn default_config() -> Self {
         Self {
+            name: None,
             mount: None,
             tools_dir: None,
             timeout_secs: default_timeout(),
