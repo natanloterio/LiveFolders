@@ -387,21 +387,33 @@ fn cmd_mcp(args: &[String]) -> Result<()> {
 
     let (cli_mount, config_path, _) = parse_mount_args(args);
 
+    let cfg_base: Option<PathBuf>;
     let cfg = match config_path {
-        Some(p) => Config::load(&p)?,
+        Some(ref p) => {
+            cfg_base = p.canonicalize().ok().and_then(|a| a.parent().map(|d| d.to_path_buf()));
+            Config::load(p)?
+        }
         None => {
             let default_path = PathBuf::from("livefolders.yaml");
             if default_path.exists() {
+                cfg_base = std::env::current_dir().ok();
                 Config::load(&default_path)?
             } else {
+                cfg_base = None;
                 Config::default_config()
             }
         }
     };
 
-    let mount = cli_mount
-        .or_else(|| cfg.mount.clone())
-        .unwrap_or_else(|| PathBuf::from(".livefolders"));
+    let mount = cli_mount.or_else(|| cfg.mount.clone()).unwrap_or_else(|| PathBuf::from(".livefolders"));
+
+    // Resolve relative mount paths against the config file's directory so that
+    // `livefolders mcp --config /abs/path/livefolders.yaml` works regardless of CWD.
+    let mount = if mount.is_relative() {
+        cfg_base.as_deref().map(|base| base.join(&mount)).unwrap_or(mount)
+    } else {
+        mount
+    };
 
     mcp::run(mount)
 }
