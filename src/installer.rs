@@ -149,7 +149,8 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
         std::io::stdout().flush()?;
         let mut ans = String::new();
         std::io::stdin().read_line(&mut ans)?;
-        if !ans.trim().eq_ignore_ascii_case("y") {
+        let a = ans.trim().to_ascii_lowercase();
+        if a != "y" && a != "yes" {
             println!("Aborted.");
             return Ok(());
         }
@@ -218,7 +219,8 @@ pub fn install_from_tarball_url(
         std::io::stdout().flush()?;
         let mut ans = String::new();
         std::io::stdin().read_line(&mut ans)?;
-        if !ans.trim().eq_ignore_ascii_case("y") {
+        let a = ans.trim().to_ascii_lowercase();
+        if a != "y" && a != "yes" {
             println!("Aborted.");
             return Ok(());
         }
