@@ -205,3 +205,46 @@ fn test_mcp_discover_and_call() {
         output,
     );
 }
+
+#[test]
+#[ignore]
+fn test_mcp_create_and_call() {
+    if prerequisites_missing() {
+        return;
+    }
+
+    let fixture = E2eFixture::new();
+    fixture.write_mcp_settings();
+
+    // Sub-case B: Claude writes a folder.yaml to create a ping tool, then calls it via MCP.
+    let tools_dir = fixture.tools_dir.to_str().unwrap().to_string();
+    let prompt = format!(
+        "You have access to LiveFolders tools via MCP. \
+         Create a new tool by writing the following YAML content to the file \
+         `{tools_dir}/ping/folder.yaml` (create the directory first):\n\
+         \nname: ping\ndescription: Returns pong.\n\nfiles:\n  - name: ping\n    type: read_invoke\n    handler: \"echo pong\"\n    input:\n      type: none\n\n\
+         Wait 3 seconds for hot-reload, then call the ping tool via MCP and tell me what it returned.",
+        tools_dir = tools_dir,
+    );
+
+    let (output, ok) = fixture.run_claude(&prompt);
+
+    assert!(ok, "claude exited with failure. Output:\n{}", output);
+    assert!(
+        output.to_lowercase().contains("pong"),
+        "expected 'pong' in claude output, got:\n{}",
+        output,
+    );
+
+    // Sub-case A: install from GitHub URL (optional, skipped unless env var set)
+    if let Ok(url) = std::env::var("LIVEFOLDERS_E2E_GITHUB_URL") {
+        let prompt_install = format!(
+            "Run the shell command: `{bin} install {url}` \
+             then list the available MCP tools and call any one of them, reporting its output.",
+            bin = fixture.livefolders_bin.to_str().unwrap(),
+            url = url,
+        );
+        let (out2, ok2) = fixture.run_claude(&prompt_install);
+        assert!(ok2, "claude install+call failed. Output:\n{}", out2);
+    }
+}
