@@ -43,7 +43,10 @@ jobs:
 
       - name: Install macFUSE (macOS)
         if: runner.os == 'macOS'
-        run: brew install macfuse
+        run: |
+          brew install --cask macfuse || true
+          # macFUSE installs .pc files to /usr/local/lib/pkgconfig on both Intel and Apple Silicon
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Build (cross)
         if: matrix.use_cross
