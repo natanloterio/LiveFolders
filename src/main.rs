@@ -217,12 +217,16 @@ fn main() -> Result<()> {
             let sub = args.get(2).map(|s| s.as_str()).unwrap_or("help");
             match sub {
                 "list" => {
-                    let cfg = {
-                        let p = PathBuf::from("livefolders.yaml");
-                        if p.exists() {
-                            Config::load(&p).unwrap_or_else(|_| Config::default_config())
-                        } else {
-                            Config::default_config()
+                    let config_path = parse_mount_args(&args).1;
+                    let cfg = match config_path {
+                        Some(p) => Config::load(&p).unwrap_or_else(|_| Config::default_config()),
+                        None => {
+                            let default = PathBuf::from("livefolders.yaml");
+                            if default.exists() {
+                                Config::load(&default).unwrap_or_else(|_| Config::default_config())
+                            } else {
+                                Config::default_config()
+                            }
                         }
                     };
                     let tools_dir = cfg.resolved_tools_dir()
@@ -686,7 +690,7 @@ fn parse_mount_args(args: &[String]) -> (Option<PathBuf>, Option<PathBuf>, bool)
             }
             "--foreground" | "-f" => foreground = true,
             // skip subcommand tokens themselves
-            "mount" | "install" | "stop" | "doctor" | "init" | "help" | "mcp" => {}
+            "mount" | "install" | "stop" | "doctor" | "init" | "help" | "mcp" | "tools" | "list" => {}
             arg if !arg.starts_with('-') => {
                 mount = Some(PathBuf::from(arg));
             }
