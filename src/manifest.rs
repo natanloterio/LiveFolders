@@ -98,6 +98,23 @@ pub struct SandboxSpec {
     pub resources: SandboxResourceSpec,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct EnvDecl {
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct McpServerSpec {
+    pub server: String,
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct Manifest {
     pub name: Option<String>,
@@ -110,15 +127,8 @@ pub struct Manifest {
     pub files: Vec<FileSpec>,
     #[serde(default)]
     pub sandbox: Option<SandboxSpec>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EnvDecl {
-    pub name: String,
-    pub description: Option<String>,
     #[serde(default)]
-    pub required: bool,
-    pub default: Option<String>,
+    pub mcp: Option<McpServerSpec>,
 }
 
 impl Manifest {
@@ -506,6 +516,30 @@ files:
         assert!(schema.max_length.is_none());
         assert!(schema.pattern.is_none());
         assert!(schema.schema.is_none());
+    }
+
+    #[test]
+    fn parse_mcp_section() {
+        let yaml = r#"
+name: brave-search
+mcp:
+  server: brave-search
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-brave-search"]
+files: []
+"#;
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        let mcp = m.mcp.as_ref().unwrap();
+        assert_eq!(mcp.server, "brave-search");
+        assert_eq!(mcp.command, "npx");
+        assert_eq!(mcp.args, vec!["-y", "@modelcontextprotocol/server-brave-search"]);
+    }
+
+    #[test]
+    fn mcp_section_absent_yields_none() {
+        let yaml = "name: plain-tool\nfiles: []\n";
+        let m: Manifest = serde_yaml::from_str(yaml).unwrap();
+        assert!(m.mcp.is_none());
     }
 }
 
