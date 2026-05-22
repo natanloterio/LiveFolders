@@ -176,6 +176,7 @@ pub fn install(url: &str, cfg: &crate::config::Config) -> Result<()> {
 pub fn install_from_tarball_url(
     tarball_url: &str,
     tool_name: &str,
+    subdir: Option<&str>,
     cfg: &crate::config::Config,
 ) -> anyhow::Result<()> {
     use std::io::Write;
@@ -218,6 +219,17 @@ pub fn install_from_tarball_url(
         .context("unexpected tarball structure: no top-level directory")?
         .path();
 
+    let tool_src = match subdir {
+        Some(sub) => {
+            let p = top_level.join(sub);
+            if !p.is_dir() {
+                anyhow::bail!("subdir '{}' not found in tarball", sub);
+            }
+            p
+        }
+        None => top_level,
+    };
+
     std::fs::create_dir_all(&tools_dir)?;
     let dest = tools_dir.join(tool_name);
 
@@ -234,7 +246,7 @@ pub fn install_from_tarball_url(
         std::fs::remove_dir_all(&dest)?;
     }
 
-    copy_dir_all(&top_level, &dest)?;
+    copy_dir_all(&tool_src, &dest)?;
 
     if let Ok(Some(manifest)) = crate::manifest::Manifest::load(&dest) {
         if let Some(ref mcp) = manifest.mcp {
