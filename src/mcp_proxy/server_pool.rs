@@ -139,4 +139,21 @@ for line in sys.stdin:
         assert!(r1.contains("tool_a"), "got: {}", r1);
         assert!(r2.contains("tool_b"), "got: {}", r2);
     }
+
+    #[test]
+    #[ignore = "requires npx and network access"]
+    fn real_filesystem_server_list_directory() {
+        // npx -y @modelcontextprotocol/server-filesystem /tmp
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = tmp.path().join("mcp-servers.yaml");
+        std::fs::write(&cfg,
+            "servers:\n  filesystem:\n    command: npx\n    args: [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n"
+        ).unwrap();
+
+        let pool = ServerPool::new(cfg);
+        let result = pool.call("filesystem", "list_directory", serde_json::json!({"path": "/tmp"})).unwrap();
+
+        println!("list_directory /tmp:\n{}", result);
+        assert!(!result.is_empty(), "Expected non-empty directory listing from real MCP server");
+    }
 }
