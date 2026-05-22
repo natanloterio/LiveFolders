@@ -216,13 +216,13 @@ fn test_mcp_create_and_call() {
     let fixture = E2eFixture::new();
     fixture.write_mcp_settings();
 
-    // Sub-case B: Claude writes a folder.yaml to create a ping tool, then calls it via MCP.
+    // Sub-case A: Claude writes a folder.yaml to create a ping tool, then calls it via MCP.
     let tools_dir = fixture.tools_dir.to_str().unwrap().to_string();
     let prompt = format!(
         "You have access to LiveFolders tools via MCP. \
          Create a new tool by writing the following YAML content to the file \
          `{tools_dir}/ping/folder.yaml` (create the directory first):\n\
-         \nname: ping\ndescription: Returns pong.\n\nfiles:\n  - name: ping\n    type: read_invoke\n    handler: \"echo pong\"\n    input:\n      type: none\n\n\
+         \n```yaml\nname: ping\ndescription: Returns pong.\n\nfiles:\n  - name: ping\n    type: read_invoke\n    handler: \"echo pong\"\n    input:\n      type: none\n```\n\n\
          Wait 3 seconds for hot-reload, then call the ping tool via MCP and tell me what it returned.",
         tools_dir = tools_dir,
     );
@@ -236,7 +236,7 @@ fn test_mcp_create_and_call() {
         output,
     );
 
-    // Sub-case A: install from GitHub URL (optional, skipped unless env var set)
+    // Sub-case B: install from GitHub URL (optional, skipped unless env var set)
     if let Ok(url) = std::env::var("LIVEFOLDERS_E2E_GITHUB_URL") {
         let prompt_install = format!(
             "Run the shell command: `{bin} install {url}` \
