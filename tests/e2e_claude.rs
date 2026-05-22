@@ -100,9 +100,9 @@ impl E2eFixture {
             .spawn()
             .expect("spawn livefolders mount");
 
-        // Poll until mount is ready (index.md synthesized by FUSE)
+        // Poll until mount is ready (index.md is at the mount root, not under tools/)
         let deadline = Instant::now() + Duration::from_secs(5);
-        let index_md = mount_dir.join("tools").join("index.md");
+        let index_md = mount_dir.join("index.md");
         loop {
             if index_md.exists() {
                 break;
@@ -265,7 +265,7 @@ fn test_claude_md_discover_and_call() {
          \n\
          To discover available tools:\n\
          ```bash\n\
-         cat .livefolders/tools/index.md\n\
+         cat .livefolders/index.md\n\
          ```\n\
          \n\
          To use a `write_invoke` tool (e.g. `shout`):\n\
