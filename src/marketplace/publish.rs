@@ -102,6 +102,9 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
     }
     println!("Pushed to GitHub.");
 
+    let clean_url = format!("https://github.com/{}", slug);
+    run_git(&clone_dir, &["remote", "set-url", "origin", &clean_url])?;
+
     publish_from_dir(&clone_dir, Some(token))
 }
 
