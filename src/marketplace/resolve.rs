@@ -6,6 +6,8 @@ pub struct ResolveResponse {
     pub name: String,
     pub version: String,
     pub tarball_url: String,
+    #[serde(default)]
+    pub subdir: Option<String>,
 }
 
 pub fn resolve(owner: &str, name: &str, version: Option<&str>) -> anyhow::Result<ResolveResponse> {

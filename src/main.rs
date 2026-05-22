@@ -127,7 +127,7 @@ fn main() -> Result<()> {
                 let resolved = marketplace::resolve::resolve(owner, name, version)
                     .context("registry lookup failed")?;
                 println!("Resolved {}/{}@{}", owner, name, resolved.version);
-                installer::install_from_tarball_url(&resolved.tarball_url, name, &cfg)?;
+                installer::install_from_tarball_url(&resolved.tarball_url, name, resolved.subdir.as_deref(), &cfg)?;
                 // Increment download counter (fire and forget)
                 let _ = reqwest::blocking::Client::builder()
                     .user_agent("livefolders")

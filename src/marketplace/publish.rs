@@ -8,22 +8,36 @@ use std::time::{Duration, Instant};
 // https://github.com/settings/developers and hard-code the client_id here.
 const DEFAULT_CLIENT_ID: &str = "Ov23litjBhDq65tLjGoP";
 
+/// Parse a publish target argument.
+///
+/// Accepted forms:
+/// - `owner/repo`        → repo_slug=`owner/repo`, subdir=None
+/// - `owner/repo/subdir` → repo_slug=`owner/repo`, subdir=Some("subdir")
+pub fn parse_publish_target(arg: &str) -> (String, Option<String>) {
+    let parts: Vec<&str> = arg.splitn(3, '/').collect();
+    match parts.as_slice() {
+        [owner, repo, subdir] => (format!("{}/{}", owner, repo), Some(subdir.to_string())),
+        _ => (arg.to_string(), None),
+    }
+}
+
 pub fn publish(repo_arg: Option<&str>) -> anyhow::Result<()> {
     let cwd = std::env::current_dir().context("could not determine current directory")?;
     let in_tool_dir = cwd.join("folder.yaml").exists() && !cwd.join(".git").exists();
 
     if in_tool_dir {
-        let slug = match repo_arg {
+        let raw = match repo_arg {
             Some(s) => s.to_string(),
             None => prompt_repo_slug()?,
         };
-        bootstrap_and_publish(&slug, &cwd)
+        let (slug, subdir) = parse_publish_target(&raw);
+        bootstrap_and_publish(&slug, subdir.as_deref(), &cwd)
     } else {
         publish_from_dir(&cwd, None)
     }
 }
 
-fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
+fn bootstrap_and_publish(slug: &str, subdir: Option<&str>, src: &Path) -> anyhow::Result<()> {
     println!("Bootstrapping repository for {}...", slug);
 
     let tmp = tempfile::tempdir().context("failed to create temp directory")?;
@@ -43,11 +57,22 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
         );
     }
 
+    // Determine the destination directory for tool files (root or subdir)
+    let files_dest = match subdir {
+        Some(sub) => {
+            let p = clone_dir.join(sub);
+            std::fs::create_dir_all(&p)
+                .with_context(|| format!("failed to create subdir {}", p.display()))?;
+            p
+        }
+        None => clone_dir.clone(),
+    };
+
     // Collect and copy publishable files
     let files = collect_publishable_files(src)?;
     println!("Copying {} file(s)...", files.len());
     for file in &files {
-        let dest = clone_dir.join(file.file_name().context("file has no name")?);
+        let dest = files_dest.join(file.file_name().context("file has no name")?);
         std::fs::copy(file, &dest)
             .with_context(|| format!("failed to copy {}", file.display()))?;
     }
@@ -62,7 +87,7 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
     if status_out.stdout.is_empty() {
         println!("No changes to commit — files already up to date.");
         let token = github_device_flow()?;
-        return publish_from_dir(&clone_dir, Some(token));
+        return publish_from_dir_with_subdir(&clone_dir, Some(token), subdir);
     }
 
     run_git(&clone_dir, &["add", "."])?;
@@ -75,7 +100,10 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
     let existing: Vec<&str> = tag_out.lines().collect();
-    let new_tag = next_version_tag(&existing);
+    let new_tag = match subdir {
+        Some(sub) => next_version_tag_scoped(&existing, sub),
+        None => next_version_tag(&existing),
+    };
     run_git(&clone_dir, &["tag", &new_tag])?;
     println!("Created tag {}.", new_tag);
 
@@ -109,10 +137,14 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
     let clean_url = format!("https://github.com/{}", slug);
     run_git(&clone_dir, &["remote", "set-url", "origin", &clean_url])?;
 
-    publish_from_dir(&clone_dir, Some(token))
+    publish_from_dir_with_subdir(&clone_dir, Some(token), subdir)
 }
 
 fn publish_from_dir(dir: &Path, token: Option<String>) -> anyhow::Result<()> {
+    publish_from_dir_with_subdir(dir, token, None)
+}
+
+fn publish_from_dir_with_subdir(dir: &Path, token: Option<String>, subdir: Option<&str>) -> anyhow::Result<()> {
     let repo_slug = get_remote_slug(dir)?;
 
     let no_tags = std::process::Command::new("git")
@@ -131,7 +163,7 @@ fn publish_from_dir(dir: &Path, token: Option<String>) -> anyhow::Result<()> {
         Some(t) => t,
         None => github_device_flow()?,
     };
-    post_to_registry(&repo_slug, &token)
+    post_to_registry(&repo_slug, &token, subdir)
 }
 
 fn get_remote_slug(dir: &Path) -> anyhow::Result<String> {
@@ -160,14 +192,19 @@ fn get_remote_slug(dir: &Path) -> anyhow::Result<String> {
     })
 }
 
-fn post_to_registry(repo_slug: &str, token: &str) -> anyhow::Result<()> {
+fn post_to_registry(repo_slug: &str, token: &str, subdir: Option<&str>) -> anyhow::Result<()> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("livefolders")
         .build()?;
 
+    let mut payload = json!({ "token": token, "repo": repo_slug });
+    if let Some(sub) = subdir {
+        payload["subdir"] = json!(sub);
+    }
+
     let resp = client
         .post(format!("{}/api/publish", super::REGISTRY_URL))
-        .json(&json!({ "token": token, "repo": repo_slug }))
+        .json(&payload)
         .send()
         .context("failed to reach registry")?;
 
@@ -248,6 +285,20 @@ fn next_version_tag(tags: &[&str]) -> String {
         Some((maj, min, patch)) => format!("v{}.{}.{}", maj, min, patch + 1),
         None => "v0.1.0".to_string(),
     }
+}
+
+/// Like `next_version_tag`, but scoped to a subdirectory prefix.
+///
+/// Only considers tags of the form `<prefix>-v*`, strips the prefix, runs the
+/// same semver-bump logic, then re-attaches the prefix.
+fn next_version_tag_scoped(tags: &[&str], prefix: &str) -> String {
+    let pfx = format!("{}-", prefix);
+    let stripped: Vec<&str> = tags
+        .iter()
+        .filter_map(|t| t.strip_prefix(pfx.as_str()))
+        .collect();
+    let bare = next_version_tag(&stripped.iter().map(|s| s.as_ref()).collect::<Vec<_>>());
+    format!("{}-{}", prefix, bare)
 }
 
 fn prompt_repo_slug() -> anyhow::Result<String> {
