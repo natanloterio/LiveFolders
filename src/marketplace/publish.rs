@@ -1,5 +1,10 @@
 use anyhow::Context;
 use serde_json::json;
+use std::time::{Duration, Instant};
+
+// Set via env var LIVEFOLDERS_GITHUB_CLIENT_ID or register an OAuth App at
+// https://github.com/settings/developers and hard-code the client_id here.
+const DEFAULT_CLIENT_ID: &str = "";
 
 pub fn publish() -> anyhow::Result<()> {
     // 1. Detect repo slug from git remote
@@ -34,15 +39,10 @@ pub fn publish() -> anyhow::Result<()> {
         eprintln!("Warning: no git tags found. Create a tag (e.g. git tag v0.1.0) for versioned installs.");
     }
 
-    // 3. Prompt for token
     println!("Publishing {} to the LiveFolders registry.", repo_slug);
-    println!("Enter a GitHub personal access token with 'repo' scope (input will be shown):");
-    let mut token = String::new();
-    std::io::stdin().read_line(&mut token).context("failed to read token")?;
-    let token = token.trim().to_string();
-    if token.is_empty() {
-        anyhow::bail!("[ERROR:AUTH] token cannot be empty");
-    }
+
+    // 3. Obtain a GitHub token via device flow
+    let token = github_device_flow()?;
 
     // 4. POST to registry
     let client = reqwest::blocking::Client::builder()
@@ -70,6 +70,89 @@ pub fn publish() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn github_device_flow() -> anyhow::Result<String> {
+    let client_id = std::env::var("LIVEFOLDERS_GITHUB_CLIENT_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string());
+
+    if client_id.is_empty() {
+        anyhow::bail!(
+            "[ERROR:AUTH] no GitHub OAuth client_id configured.\n\
+             Set LIVEFOLDERS_GITHUB_CLIENT_ID or register an app at https://github.com/settings/developers"
+        );
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("livefolders")
+        .build()?;
+
+    // Request device code
+    let resp = client
+        .post("https://github.com/login/device/code")
+        .header("Accept", "application/json")
+        .form(&[("client_id", client_id.as_str()), ("scope", "repo")])
+        .send()
+        .context("failed to contact GitHub")?;
+
+    let device: serde_json::Value = resp.json().context("invalid response from GitHub device endpoint")?;
+
+    let device_code = device["device_code"].as_str().context("missing device_code")?;
+    let user_code = device["user_code"].as_str().context("missing user_code")?;
+    let verification_uri = device["verification_uri"].as_str().unwrap_or("https://github.com/login/device");
+    let interval_secs = device["interval"].as_u64().unwrap_or(5);
+    let expires_in = device["expires_in"].as_u64().unwrap_or(900);
+
+    println!("\nTo authorize, open this URL in your browser:");
+    println!("  {}", verification_uri);
+    println!("\nEnter code: {}\n", user_code);
+
+    // Try to open the browser automatically
+    let _ = std::process::Command::new("xdg-open").arg(verification_uri).spawn()
+        .or_else(|_| std::process::Command::new("open").arg(verification_uri).spawn());
+
+    // Poll for access token
+    let deadline = Instant::now() + Duration::from_secs(expires_in);
+    let poll_interval = Duration::from_secs(interval_secs);
+
+    loop {
+        std::thread::sleep(poll_interval);
+
+        if Instant::now() > deadline {
+            anyhow::bail!("[ERROR:AUTH] device flow expired — run `livefolders publish` again");
+        }
+
+        let poll = client
+            .post("https://github.com/login/oauth/access_token")
+            .header("Accept", "application/json")
+            .form(&[
+                ("client_id", client_id.as_str()),
+                ("device_code", device_code),
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+            ])
+            .send()
+            .context("failed to poll GitHub token endpoint")?;
+
+        let body: serde_json::Value = poll.json().context("invalid token response")?;
+
+        if let Some(token) = body["access_token"].as_str() {
+            println!("Authorized.");
+            return Ok(token.to_string());
+        }
+
+        match body["error"].as_str() {
+            Some("authorization_pending") => continue,
+            Some("slow_down") => {
+                std::thread::sleep(Duration::from_secs(interval_secs));
+            }
+            Some("expired_token") => anyhow::bail!("[ERROR:AUTH] device code expired — run `livefolders publish` again"),
+            Some("access_denied") => anyhow::bail!("[ERROR:AUTH] access denied by user"),
+            Some(other) => anyhow::bail!("[ERROR:AUTH] {}", other),
+            None => continue,
+        }
+    }
 }
 
 fn extract_slug(remote_url: &str) -> Option<String> {

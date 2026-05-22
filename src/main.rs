@@ -602,7 +602,7 @@ fn build_registry(cfg: &Config) -> ToolRegistry {
                 registry.register(Arc::new(EchoTool));
                 info!("registered tool: echo");
             }
-            other => warn!("unknown built-in tool in config: {}", other),
+            _ => {}
         }
     }
 
