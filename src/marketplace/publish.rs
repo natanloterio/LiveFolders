@@ -79,7 +79,7 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
         if let Err(e) = run_git(&clone_dir, &["push"])
             .and_then(|_| run_git(&clone_dir, &["push", "--tags"]))
         {
-            let saved = tmp.into_path();
+            let saved = tmp.keep();
             anyhow::bail!(
                 "{}\n\n\
                  The committed repo was saved to: {}\n\
