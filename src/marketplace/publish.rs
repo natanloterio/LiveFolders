@@ -61,41 +61,48 @@ fn bootstrap_and_publish(slug: &str, src: &Path) -> anyhow::Result<()> {
 
     if status_out.stdout.is_empty() {
         println!("No changes to commit — files already up to date.");
-    } else {
-        run_git(&clone_dir, &["add", "."])?;
-        run_git(&clone_dir, &["commit", "-m", "feat: add tool definition"])?;
-
-        let tag_out = std::process::Command::new("git")
-            .args(["tag", "--list"])
-            .current_dir(&clone_dir)
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-            .unwrap_or_default();
-        let existing: Vec<&str> = tag_out.lines().collect();
-        let new_tag = next_version_tag(&existing);
-        run_git(&clone_dir, &["tag", &new_tag])?;
-        println!("Created tag {}.", new_tag);
-
-        if let Err(e) = run_git(&clone_dir, &["push"])
-            .and_then(|_| run_git(&clone_dir, &["push", "--tags"]))
-        {
-            let saved = tmp.keep();
-            anyhow::bail!(
-                "{}\n\n\
-                 The committed repo was saved to: {}\n\
-                 Fix credentials (e.g. gh auth login) then run:\n  \
-                 cd {} && git push && git push --tags\n  \
-                 livefolders publish {}",
-                e,
-                saved.join("repo").display(),
-                saved.join("repo").display(),
-                slug
-            );
-        }
-        println!("Pushed to GitHub.");
+        let token = github_device_flow()?;
+        return publish_from_dir(&clone_dir, Some(token));
     }
 
-    publish_from_dir(&clone_dir, None)
+    run_git(&clone_dir, &["add", "."])?;
+    run_git(&clone_dir, &["commit", "-m", "feat: add tool definition"])?;
+
+    let tag_out = std::process::Command::new("git")
+        .args(["tag", "--list"])
+        .current_dir(&clone_dir)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let existing: Vec<&str> = tag_out.lines().collect();
+    let new_tag = next_version_tag(&existing);
+    run_git(&clone_dir, &["tag", &new_tag])?;
+    println!("Created tag {}.", new_tag);
+
+    let token = github_device_flow()?;
+
+    let auth_url = format!("https://x-access-token:{}@github.com/{}", token, slug);
+    run_git(&clone_dir, &["remote", "set-url", "origin", &auth_url])?;
+
+    if let Err(e) = run_git(&clone_dir, &["push"])
+        .and_then(|_| run_git(&clone_dir, &["push", "--tags"]))
+    {
+        let saved = tmp.keep();
+        anyhow::bail!(
+            "{}\n\n\
+             The committed repo was saved to: {}\n\
+             Fix credentials (e.g. gh auth login) then run:\n  \
+             cd {} && git push && git push --tags\n  \
+             livefolders publish {}",
+            e,
+            saved.join("repo").display(),
+            saved.join("repo").display(),
+            slug
+        );
+    }
+    println!("Pushed to GitHub.");
+
+    publish_from_dir(&clone_dir, Some(token))
 }
 
 fn publish_from_dir(dir: &Path, token: Option<String>) -> anyhow::Result<()> {
