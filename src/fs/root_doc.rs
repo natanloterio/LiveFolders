@@ -307,10 +307,10 @@ The result is cleared after you read it — the file resets to empty, ready for 
 
 ```
 cat /tools/github/how_to.md
-echo \"language:rust fuse stars:>100\" > /tools/github/search_repos
-sleep 3
-cat /tools/github/search_repos
+echo \"language:rust fuse stars:>100\" > /tools/github/search_repos && cat /tools/github/search_repos
 ```
+
+The write blocks until the handler finishes — no sleep needed.
 
 ## Rules
 
@@ -320,6 +320,41 @@ cat /tools/github/search_repos
 - **how_to.md is read-only.** It describes what the tool does and what to write.
 - **Regular files in tool dirs** (non-executable) are passthrough — read and write go directly to disk.
 - **You can create new tools** by creating a directory under /tools/ and adding executable scripts.
+
+## Concurrency and session isolation
+
+Each shell session (process group) gets its own isolated invocation slot per endpoint.
+Writes and reads from different shells never interfere — two shells can invoke the same
+endpoint at the same time and each receives its own result.
+
+**The write and read MUST come from the same shell session.**
+Use `&&` to chain them in one command — this is the only safe pattern:
+
+```
+echo \"input\" > /tools/<name>/<endpoint> && cat /tools/<name>/<endpoint>
+```
+
+**Never split write and read across separate shell invocations:**
+
+```
+# WRONG — the read runs in a different session and will see empty or another session's result
+echo \"input\" > /tools/<name>/<endpoint>
+cat /tools/<name>/<endpoint>
+```
+
+**Parallel invocations are safe** as long as each pair stays in the same session:
+
+```
+# Safe: three independent invocations in three subshells
+(echo \"query1\" > /tools/search/run && cat /tools/search/run) &
+(echo \"query2\" > /tools/search/run && cat /tools/search/run) &
+(echo \"query3\" > /tools/search/run && cat /tools/search/run) &
+wait
+```
+
+**Pipe endpoints** (`read_invoke` chains) follow the same rule — `cat /tools/<name>/report`
+from one shell and reading the result from another shell will not work.
+Always read from the same shell that opened the file.
 
 ## Creating a tool on the fly
 
@@ -332,3 +367,89 @@ chmod +x /tools/mytool/fetch
 
 The tool is live immediately — no restart needed.
 ";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_how_to_documents_concurrency_section() {
+        assert!(
+            ROOT_HOW_TO.contains("Concurrency and session isolation"),
+            "ROOT_HOW_TO must have a concurrency section"
+        );
+    }
+
+    #[test]
+    fn root_how_to_explains_session_isolation() {
+        assert!(
+            ROOT_HOW_TO.contains("session"),
+            "ROOT_HOW_TO must explain session-based slot isolation"
+        );
+        assert!(
+            ROOT_HOW_TO.contains("isolated invocation slot"),
+            "ROOT_HOW_TO must mention isolated invocation slots"
+        );
+    }
+
+    #[test]
+    fn root_how_to_shows_and_and_as_correct_pattern() {
+        assert!(
+            ROOT_HOW_TO.contains("echo \"input\" > /tools/<name>/<endpoint> && cat /tools/<name>/<endpoint>"),
+            "ROOT_HOW_TO must show the && write-then-read pattern"
+        );
+    }
+
+    #[test]
+    fn root_how_to_calls_out_wrong_split_pattern() {
+        assert!(
+            ROOT_HOW_TO.contains("WRONG"),
+            "ROOT_HOW_TO must explicitly label the split write/read antipattern as WRONG"
+        );
+    }
+
+    #[test]
+    fn root_how_to_shows_safe_parallel_pattern() {
+        assert!(
+            ROOT_HOW_TO.contains("Parallel invocations are safe"),
+            "ROOT_HOW_TO must document that parallel invocations are safe"
+        );
+        assert!(
+            ROOT_HOW_TO.contains("wait"),
+            "ROOT_HOW_TO parallel example must include 'wait' to collect subshells"
+        );
+    }
+
+    #[test]
+    fn root_how_to_covers_pipe_endpoint_concurrency() {
+        assert!(
+            ROOT_HOW_TO.contains("Pipe endpoints"),
+            "ROOT_HOW_TO must address session isolation for pipe endpoints"
+        );
+        assert!(
+            ROOT_HOW_TO.contains("same shell that opened the file"),
+            "ROOT_HOW_TO must instruct reading from the same shell"
+        );
+    }
+
+    #[test]
+    fn root_how_to_example_does_not_use_sleep_as_command() {
+        // The example section must not teach `sleep N` as an invocation pattern.
+        // Write blocks until the handler finishes; sleep is never needed.
+        // We check for `sleep <digit>` to avoid false-positives on "no sleep needed".
+        let example_section = ROOT_HOW_TO
+            .split("## Example")
+            .nth(1)
+            .unwrap_or("");
+        let has_sleep_cmd = example_section
+            .lines()
+            .any(|line| {
+                let t = line.trim();
+                t.starts_with("sleep ") && t[6..].chars().next().is_some_and(|c| c.is_ascii_digit())
+            });
+        assert!(
+            !has_sleep_cmd,
+            "Example section must not use 'sleep N' — writes block until the handler finishes"
+        );
+    }
+}
