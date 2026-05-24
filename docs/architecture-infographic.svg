@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafbfc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="600" y="58" text-anchor="middle" font-size="36" font-weight="700" fill="#0f172a">LiveFolders</text>
+  <text x="600" y="90" text-anchor="middle" font-size="16" fill="#475569">Pipe past MCP's context tax.</text>
+
+  <!-- ============================================================ -->
+  <!-- PANEL 1: Concurrency                                         -->
+  <!-- ============================================================ -->
+  <g transform="translate(60, 130)">
+    <text x="0" y="0" font-size="22" font-weight="700" fill="#0f172a">1. Concurrency</text>
+    <text x="0" y="26" font-size="13" fill="#64748b">Two LLM sessions chain the same tools in parallel — each gets its own per-session slots via <tspan font-family="ui-monospace, monospace" fill="#0d9488">getsid(req.pid())</tspan>.</text>
+
+    <!-- Shell A -->
+    <rect x="0" y="50" width="540" height="244" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect x="0" y="50" width="540" height="36" rx="10" fill="#0f172a"/>
+    <rect x="0" y="76" width="540" height="10" fill="#0f172a"/>
+    <text x="20" y="74" font-size="13" font-weight="600" fill="white">LLM session A</text>
+    <text x="520" y="74" text-anchor="end" font-size="11" fill="#94a3b8" font-family="ui-monospace, monospace">sid = 12345</text>
+
+    <g font-family="ui-monospace, 'SF Mono', monospace" font-size="12">
+      <text x="20" y="112" fill="#475569">$ echo "alpha" &gt; shout/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="20" y="130" fill="#475569">    cat shout/in &gt; reverse/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="20" y="148" fill="#475569">    cat reverse/in</text>
+      <text x="20" y="172" fill="#0d9488" font-weight="600">AHPLA</text>
+    </g>
+
+    <line x1="20" y1="192" x2="520" y2="192" stroke="#f1f5f9"/>
+
+    <g>
+      <rect x="20" y="206" width="240" height="68" rx="6" fill="#f0fdfa" stroke="#a7f3d0"/>
+      <text x="32" y="226" font-size="11" font-weight="600" fill="#0f766e">shout slot (sid 12345)</text>
+      <text x="32" y="246" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">in:  "alpha"</text>
+      <text x="32" y="262" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">out: "ALPHA"</text>
+
+      <rect x="280" y="206" width="240" height="68" rx="6" fill="#f0fdfa" stroke="#a7f3d0"/>
+      <text x="292" y="226" font-size="11" font-weight="600" fill="#0f766e">reverse slot (sid 12345)</text>
+      <text x="292" y="246" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">in:  "ALPHA"</text>
+      <text x="292" y="262" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">out: "AHPLA"</text>
+    </g>
+
+    <!-- Shell B -->
+    <rect x="560" y="50" width="540" height="244" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect x="560" y="50" width="540" height="36" rx="10" fill="#0f172a"/>
+    <rect x="560" y="76" width="540" height="10" fill="#0f172a"/>
+    <text x="580" y="74" font-size="13" font-weight="600" fill="white">LLM session B (in parallel)</text>
+    <text x="1080" y="74" text-anchor="end" font-size="11" fill="#94a3b8" font-family="ui-monospace, monospace">sid = 67890</text>
+
+    <g font-family="ui-monospace, 'SF Mono', monospace" font-size="12">
+      <text x="580" y="112" fill="#475569">$ echo "bravo" &gt; shout/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="580" y="130" fill="#475569">    cat shout/in &gt; reverse/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="580" y="148" fill="#475569">    cat reverse/in</text>
+      <text x="580" y="172" fill="#f59e0b" font-weight="600">OVARB</text>
+    </g>
+
+    <line x1="580" y1="192" x2="1080" y2="192" stroke="#f1f5f9"/>
+
+    <g>
+      <rect x="580" y="206" width="240" height="68" rx="6" fill="#fffbeb" stroke="#fde68a"/>
+      <text x="592" y="226" font-size="11" font-weight="600" fill="#92400e">shout slot (sid 67890)</text>
+      <text x="592" y="246" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">in:  "bravo"</text>
+      <text x="592" y="262" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">out: "BRAVO"</text>
+
+      <rect x="840" y="206" width="240" height="68" rx="6" fill="#fffbeb" stroke="#fde68a"/>
+      <text x="852" y="226" font-size="11" font-weight="600" fill="#92400e">reverse slot (sid 67890)</text>
+      <text x="852" y="246" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">in:  "BRAVO"</text>
+      <text x="852" y="262" font-size="11" font-family="ui-monospace, monospace" fill="#0f172a">out: "OVARB"</text>
+    </g>
+
+    <text x="0" y="322" font-size="12" fill="#64748b">Per-session isolation extends across <tspan font-weight="600">every</tspan> tool in the chain. Two LLMs can each run their own pipeline without collision.</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- PANEL 2: Tool composition (LLM-orchestrated)                 -->
+  <!-- ============================================================ -->
+  <g transform="translate(60, 510)">
+    <text x="0" y="0" font-size="22" font-weight="700" fill="#0f172a">2. Tool composition</text>
+    <text x="0" y="26" font-size="13" fill="#64748b">The LLM emits one shell pipeline. Bytes flow tool → tool on the host; intermediate state never enters the model.</text>
+
+    <!-- The LLM's bash command -->
+    <rect x="0" y="50" width="1080" height="180" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+    <rect x="0" y="50" width="1080" height="32" rx="10" fill="#1e293b"/>
+    <rect x="0" y="72" width="1080" height="10" fill="#1e293b"/>
+    <text x="20" y="72" font-size="12" font-weight="600" fill="#cbd5e1">LLM → Bash (one tool call, one turn)</text>
+    <circle cx="1056" cy="66" r="4" fill="#22c55e"/>
+    <circle cx="1042" cy="66" r="4" fill="#f59e0b"/>
+    <circle cx="1028" cy="66" r="4" fill="#ef4444"/>
+
+    <g font-family="ui-monospace, 'SF Mono', monospace" font-size="13">
+      <text x="20" y="106" fill="#94a3b8"># incident triage: fetch alerts → dedupe → rank → link runbooks</text>
+      <text x="20" y="128" fill="#e2e8f0">$ cat .livefolders/tools/datadog/alerts \</text>
+      <text x="20" y="146" fill="#e2e8f0">    | <tspan fill="#a78bfa">jq</tspan> <tspan fill="#fbbf24">'unique_by(.fingerprint)'</tspan> \</text>
+      <text x="20" y="164" fill="#e2e8f0">    &gt; .livefolders/tools/rank/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="20" y="182" fill="#e2e8f0">  cat .livefolders/tools/rank/in &gt; .livefolders/tools/link/in <tspan fill="#94a3b8">&amp;&amp;</tspan> \</text>
+      <text x="20" y="200" fill="#e2e8f0">  cat .livefolders/tools/link/in</text>
+      <text x="20" y="222" fill="#0d9488"># P0  Database connection pool exhausted  →  runbook: db-pool.md</text>
+    </g>
+
+    <!-- Data flow visualization -->
+    <text x="0" y="270" font-size="14" font-weight="600" fill="#0f172a">What flows where</text>
+    <text x="0" y="290" font-size="12" fill="#64748b">Each arrow is bytes on the host. The LLM sees only the final line.</text>
+
+    <g transform="translate(0, 310)">
+      <!-- datadog -->
+      <rect x="0" y="0" width="160" height="60" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+      <text x="80" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">datadog/alerts</text>
+      <text x="80" y="40" text-anchor="middle" font-size="10" fill="#64748b">LiveFolders tool</text>
+      <text x="80" y="54" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="ui-monospace, monospace">read_invoke</text>
+
+      <line x1="160" y1="30" x2="200" y2="30" stroke="#0d9488" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="180" y="22" text-anchor="middle" font-size="9" fill="#64748b">JSON</text>
+
+      <!-- jq -->
+      <rect x="204" y="0" width="160" height="60" rx="8" fill="white" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="284" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">jq</text>
+      <text x="284" y="40" text-anchor="middle" font-size="10" fill="#64748b">regular Unix tool</text>
+      <text x="284" y="54" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="ui-monospace, monospace">unique_by</text>
+
+      <line x1="364" y1="30" x2="404" y2="30" stroke="#0d9488" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="384" y="22" text-anchor="middle" font-size="9" fill="#64748b">JSON</text>
+
+      <!-- rank -->
+      <rect x="408" y="0" width="160" height="60" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+      <text x="488" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">rank</text>
+      <text x="488" y="40" text-anchor="middle" font-size="10" fill="#64748b">LiveFolders tool</text>
+      <text x="488" y="54" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="ui-monospace, monospace">python ./rank.py</text>
+
+      <line x1="568" y1="30" x2="608" y2="30" stroke="#0d9488" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="588" y="22" text-anchor="middle" font-size="9" fill="#64748b">ranked</text>
+
+      <!-- link -->
+      <rect x="612" y="0" width="160" height="60" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+      <text x="692" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">link</text>
+      <text x="692" y="40" text-anchor="middle" font-size="10" fill="#64748b">LiveFolders tool</text>
+      <text x="692" y="54" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="ui-monospace, monospace">./runbook.sh</text>
+
+      <line x1="772" y1="30" x2="812" y2="30" stroke="#0d9488" stroke-width="2" marker-end="url(#arrow)"/>
+      <text x="792" y="22" text-anchor="middle" font-size="9" fill="#64748b">stdout</text>
+
+      <!-- LLM -->
+      <rect x="816" y="0" width="160" height="60" rx="8" fill="#0d9488"/>
+      <text x="896" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="white">LLM context</text>
+      <text x="896" y="40" text-anchor="middle" font-size="10" fill="#a7f3d0">final markdown</text>
+      <text x="896" y="54" text-anchor="middle" font-size="10" fill="#a7f3d0" font-family="ui-monospace, monospace">~600 tokens</text>
+    </g>
+
+    <text x="0" y="402" font-size="12" fill="#64748b">LiveFolders tools and regular shell tools mix freely. No <tspan font-family="ui-monospace, monospace" fill="#7c3aed">pipe:</tspan> field in <tspan font-family="ui-monospace, monospace" fill="#7c3aed">folder.yaml</tspan>; the chain is whatever the LLM writes.</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- PANEL 3: vs MCP                                              -->
+  <!-- ============================================================ -->
+  <g transform="translate(60, 970)">
+    <text x="0" y="0" font-size="14" font-weight="600" fill="#0f172a">vs. the same workflow over MCP</text>
+    <text x="0" y="22" font-size="12" fill="#64748b">Every tool call is a separate LLM turn. Intermediate JSON re-enters context. The model has to remember the plan between turns.</text>
+
+    <g transform="translate(0, 44)">
+      <rect x="0" y="0" width="100" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="50" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">LLM</text>
+      <text x="50" y="34" text-anchor="middle" font-size="9" fill="#64748b">turn 1</text>
+
+      <line x1="100" y1="22" x2="156" y2="22" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/>
+      <text x="128" y="16" text-anchor="middle" font-size="9" fill="#64748b">fetch</text>
+
+      <rect x="160" y="0" width="84" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="202" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">MCP</text>
+      <text x="202" y="34" text-anchor="middle" font-size="9" fill="#64748b">datadog</text>
+
+      <line x1="244" y1="22" x2="300" y2="22" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/>
+      <text x="272" y="16" text-anchor="middle" font-size="9" fill="#64748b">JSON</text>
+
+      <rect x="304" y="0" width="100" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="354" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">LLM</text>
+      <text x="354" y="34" text-anchor="middle" font-size="9" fill="#64748b">turn 2: dedupe</text>
+
+      <line x1="404" y1="22" x2="460" y2="22" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/>
+
+      <rect x="464" y="0" width="84" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="506" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">MCP</text>
+      <text x="506" y="34" text-anchor="middle" font-size="9" fill="#64748b">jq</text>
+
+      <line x1="548" y1="22" x2="604" y2="22" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-slate)"/>
+
+      <rect x="608" y="0" width="100" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="658" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">LLM</text>
+      <text x="658" y="34" text-anchor="middle" font-size="9" fill="#64748b">turn 3: rank</text>
+
+      <text x="720" y="30" font-size="22" fill="#94a3b8">⋯</text>
+
+      <rect x="760" y="0" width="100" height="44" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1.5"/>
+      <text x="810" y="20" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">LLM</text>
+      <text x="810" y="34" text-anchor="middle" font-size="9" fill="#64748b">turn N: read result</text>
+    </g>
+
+    <g transform="translate(0, 116)">
+      <rect x="0" y="0" width="1080" height="84" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5"/>
+
+      <text x="20" y="26" font-size="12" font-weight="600" fill="#0d9488">LiveFolders</text>
+      <text x="20" y="46" font-size="11" fill="#64748b">1 LLM turn  ·  1 Bash invocation  ·  intermediate bytes never enter context</text>
+      <text x="20" y="64" font-size="11" fill="#64748b">LLM controls the chain; mixes LiveFolders tools with any Unix tool freely</text>
+
+      <line x1="540" y1="14" x2="540" y2="70" stroke="#f1f5f9"/>
+
+      <text x="560" y="26" font-size="12" font-weight="600" fill="#0f172a">MCP</text>
+      <text x="560" y="46" font-size="11" fill="#64748b">N LLM turns  ·  every intermediate payload re-enters context  ·  N RTT</text>
+      <text x="560" y="64" font-size="11" fill="#64748b">model pays the prefill cost on every turn and has to remember what comes next</text>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <text x="600" y="1175" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="ui-monospace, monospace">github.com/natanloterio/LiveFolders  ·  Apache 2.0</text>
+</svg>
